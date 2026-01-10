@@ -1,0 +1,56 @@
+--- RECEIPTS TABLE DUMP ---
+ID: bd3e6e07-c2f2-49a4-bcaf-35b62d68e783
+SALE_ID: eaf5cdfb-13a4-4954-89ce-86c7ba50e898
+CREATED_AT: Thu Jan 01 2026 21:31:31 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"eaf5cdfb-13a4-4954-89ce-86c7ba50e898","transactionId":"TR-1767299491585-773","date":"2026-01-01T20:31:31.636Z","items":[{"id":"e279a352-3c18-484b-9ea9-8e9ff23f6b92","name":"Cough Syrup (Adult)","quantity":1,"price":350,"unitPrice":350,"isWholesale":false,"discount":0,"total":350}],"total":350,"discount":0,"tax_amount":0,"customerName":"FATIMA SAIDU","customerPhone":"07037756726","cashierName":"Cashier","cashierEmail":"cashier@pharmcarepro.com","cashierId":"8d5147af-99fc-4b3b-8a5d-91eb6ff2bec3","saleType":"retail"}
+---------------------------
+ID: c35fb5db-0f2f-4bd9-9e73-8e90a82b170b
+SALE_ID: 8998ed7f-30ef-48e5-bdee-98c0f0de578c
+CREATED_AT: Thu Jan 01 2026 03:48:54 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"8998ed7f-30ef-48e5-bdee-98c0f0de578c","transactionId":"TR-1767235734068-259","date":"2026-01-01T02:48:54.109Z","items":[{"id":"dfe26b72-15b6-4e01-8316-821a51813322","name":"Ibuprofen 400mg","quantity":1,"price":75,"unitPrice":75,"isWholesale":false,"discount":0,"total":75}],"total":75,"discount":0,"tax_amount":0,"customerName":"Taye","customerPhone":"09055546098","cashierName":"Pharmacist","cashierEmail":"pharm@pharmcarepro.com","cashierId":"48077304-5191-46b8-bb80-8137198aba79","saleType":"retail"}
+---------------------------
+ID: 516a2f47-05ac-474e-884a-3595fe8ee1ba
+SALE_ID: c2e59a1b-4d43-4797-92f8-7b69068ba804
+CREATED_AT: Thu Jan 01 2026 03:24:26 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"c2e59a1b-4d43-4797-92f8-7b69068ba804","transactionId":"TR-1767234266785-289","date":"2026-01-01T02:24:26.828Z","items":[{"id":"69cfb698-fc16-4a62-ba29-85957426705e","name":"Vitamin C 1000mg","quantity":1,"price":25,"unitPrice":25,"isWholesale":false,"discount":0,"total":25}],"total":25,"discount":0,"tax_amount":0,"customerName":"Eno","customerPhone":"09055546098","cashierName":"Pharmacist","cashierEmail":"pharm@pharmcarepro.com","cashierId":"48077304-5191-46b8-bb80-8137198aba79","saleType":"retail"}
+---------------------------
+ID: e13e2c4f-4fe3-4c47-ac44-c8cd64a864d9
+SALE_ID: 35aa3d91-10a0-4e2c-84b0-1ec83415b5e8
+CREATED_AT: Thu Jan 01 2026 03:16:26 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"35aa3d91-10a0-4e2c-84b0-1ec83415b5e8","transactionId":"TR-1767233786546-6","date":"2026-01-01T02:16:26.565Z","items":[{"id":"e279a352-3c18-484b-9ea9-8e9ff23f6b92","name":"Cough Syrup (Adult)","quantity":1,"price":350,"unitPrice":350,"isWholesale":false,"discount":0,"total":350}],"total":350,"discount":0,"tax_amount":0,"customerName":"Taye","customerPhone":"09055546098","cashierName":"Pharmacist","cashierEmail":"pharm@pharmcarepro.com","cashierId":"48077304-5191-46b8-bb80-8137198aba79","saleType":"retail"}
+---------------------------
+ID: 6f1b44b7-b558-4a9e-be53-9d2b9c1cd546
+SALE_ID: d0044379-824e-478e-a6c3-f2fce28eb7f4
+CREATED_AT: Thu Jan 01 2026 03:07:13 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"d0044379-824e-478e-a6c3-f2fce28eb7f4","transactionId":"TR-1767233233120-242","date":"2026-01-01T02:07:13.142Z","items":[{"id":"b3752044-8e67-4273-9fb2-b56e117bbb28","name":"Amoxicillin 250mg","quantity":1,"price":60,"unitPrice":60,"isWholesale":false,"discount":0,"total":60}],"total":60,"discount":0,"tax_amount":0,"customerName":"Taye","customerPhone":"09055546098","cashierName":"Pharmacist","cashierEmail":"pharm@pharmcarepro.com","cashierId":"48077304-5191-46b8-bb80-8137198aba79","saleType":"retail"}
+---------------------------
+ID: f7d532cf-a456-44aa-99a3-4dc720bfb629
+SALE_ID: e2c0f5fc-7e02-4ec5-8026-10c4725345e1
+CREATED_AT: Thu Jan 01 2026 02:39:00 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"e2c0f5fc-7e02-4ec5-8026-10c4725345e1","transactionId":"TR-1767231540322-720","date":"2026-01-01T01:39:00.719Z","items":[{"id":"b3752044-8e67-4273-9fb2-b56e117bbb28","name":"Amoxicillin 250mg","quantity":2,"price":60,"unitPrice":60,"isWholesale":false,"discount":0,"total":120},{"id":"1b9297c7-ded9-4a0c-809c-572dbaa396ed","name":"Paracetamol 500mg","quantity":1,"price":15,"unitPrice":15,"isWholesale":false,"discount":0,"total":15}],"total":135,"discount":0,"tax_amount":0,"customerName":"Emma","customerPhone":"09055546098","cashierName":"Cashier","cashierEmail":"cashier@pharmcarepro.com","cashierId":"8d5147af-99fc-4b3b-8a5d-91eb6ff2bec3","saleType":"retail"}
+---------------------------
+ID: e27403b2-094a-4d0c-b0f4-fbf711733b12
+SALE_ID: 4998fbb4-6dec-4fdf-a338-294df3adae7e
+CREATED_AT: Wed Dec 31 2025 21:45:29 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"4998fbb4-6dec-4fdf-a338-294df3adae7e","transactionId":"TR-1767213929867-825","date":"2025-12-31T20:45:29.893Z","items":[{"id":"e279a352-3c18-484b-9ea9-8e9ff23f6b92","name":"Cough Syrup (Adult)","quantity":1,"price":350,"unitPrice":350,"isWholesale":false,"discount":0,"total":350}],"total":350,"discount":0,"tax_amount":0,"customerName":"Eazy","customerPhone":"09055546098","cashierName":"user","cashierEmail":"admin@pharmcare.local","cashierId":"admin-seed-id","saleType":"retail"}
+---------------------------
+ID: 5ff08fa1-9111-4d24-b27f-c43f705aaf37
+SALE_ID: 293987b3-638b-4e17-a0c6-b4f07c0fc163
+CREATED_AT: Wed Dec 31 2025 21:41:14 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"293987b3-638b-4e17-a0c6-b4f07c0fc163","transactionId":"TR-1767213669828-130","date":"2025-12-31T20:41:14.356Z","items":[{"id":"b3752044-8e67-4273-9fb2-b56e117bbb28","name":"Amoxicillin 250mg","quantity":1,"price":60,"unitPrice":60,"isWholesale":false,"discount":0,"total":60},{"id":"e279a352-3c18-484b-9ea9-8e9ff23f6b92","name":"Cough Syrup (Adult)","quantity":1,"price":350,"unitPrice":350,"isWholesale":false,"discount":0,"total":350},{"id":"1b9297c7-ded9-4a0c-809c-572dbaa396ed","name":"Paracetamol 500mg","quantity":1,"price":15,"unitPrice":15,"isWholesale":false,"discount":0,"total":15}],"total":425,"discount":0,"tax_amount":0,"customerName":"Inno","customerPhone":"09055546098","cashierName":"user","cashierEmail":"admin@pharmcare.local","cashierId":"admin-seed-id","saleType":"retail"}
+---------------------------
+ID: 248061d1-f8ee-4186-a777-131aaee00793
+SALE_ID: 5109d983-96ca-4efb-bd6e-e819a1682afd
+CREATED_AT: Wed Dec 31 2025 21:40:24 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"5109d983-96ca-4efb-bd6e-e819a1682afd","transactionId":"TR-1767213615791-829","date":"2025-12-31T20:40:24.916Z","items":[{"id":"1b9297c7-ded9-4a0c-809c-572dbaa396ed","name":"Paracetamol 500mg","quantity":1,"price":15,"unitPrice":15,"isWholesale":false,"discount":0,"total":15}],"total":15,"discount":0,"tax_amount":0,"customerName":"Inno","customerPhone":"09055546098","cashierName":"user","cashierEmail":"admin@pharmcare.local","cashierId":"admin-seed-id","saleType":"retail"}
+---------------------------
+ID: f6146f8e-eac7-442a-bbbb-3d3ce8075217
+SALE_ID: a5aa4a0f-289d-4240-a59a-1ff124b2ec1f
+CREATED_AT: Wed Dec 31 2025 21:31:06 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"a5aa4a0f-289d-4240-a59a-1ff124b2ec1f","transactionId":"TR-1767213061167-212","date":"2025-12-31T20:31:06.951Z","items":[{"id":"69cfb698-fc16-4a62-ba29-85957426705e","name":"Vitamin C 1000mg","quantity":1,"price":25,"unitPrice":25,"isWholesale":false,"discount":0,"total":25}],"total":25,"discount":0,"tax_amount":0,"customerName":"Oye","customerPhone":"09055546098","cashierName":"user","cashierEmail":"admin@pharmcare.local","cashierId":"admin-seed-id","saleType":"retail"}
+---------------------------
+ID: fc2f0003-1487-41c9-ba9f-51662525391b
+SALE_ID: 640612fd-146f-4440-8c56-bfb228e157c1
+CREATED_AT: Wed Dec 31 2025 21:23:37 GMT+0100 (West Africa Standard Time)
+DATA: {"saleId":"640612fd-146f-4440-8c56-bfb228e157c1","transactionId":"TR-1767212583757-85","date":"2025-12-31T20:23:37.750Z","items":[{"id":"b3752044-8e67-4273-9fb2-b56e117bbb28","name":"Amoxicillin 250mg","quantity":2,"price":60,"unitPrice":60,"isWholesale":false,"discount":0,"total":120}],"total":120,"discount":0,"tax_amount":0,"customerName":"Emma","customerPhone":"09055546098","cashierName":"user","cashierEmail":"admin@pharmcare.local","cashierId":"admin-seed-id","saleType":"retail"}
+---------------------------
