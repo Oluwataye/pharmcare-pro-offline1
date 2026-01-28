@@ -29,6 +29,7 @@ export const useInventoryCRUD = () => {
 
       // If online, save to Local DB
       if (isOnline && user) {
+        // Use a transaction if possible, but for simplicity here we do sequential
         const { data, error } = await db
           .from('inventory')
           .insert({
@@ -52,6 +53,20 @@ export const useInventoryCRUD = () => {
           .single();
 
         if (error) throw error;
+
+        // Log Initial Stock Movement
+        await db.from('stock_movements').insert({
+          product_id: data.id,
+          quantity_change: data.quantity,
+          previous_quantity: 0,
+          new_quantity: data.quantity,
+          type: 'INITIAL',
+          reason: 'Initial stock entry',
+          created_by: user.id,
+          batch_number: data.batch_number,
+          cost_price_at_time: Number(data.cost_price),
+          unit_price_at_time: Number(data.price)
+        });
 
         // Convert database format to app format
         const item: InventoryItem = {
@@ -250,28 +265,26 @@ export const useInventoryCRUD = () => {
     if (!item) return;
 
     try {
-      // 1. Record the adjustment in the audit table if online
+      // 1. Record the movement in the standardized stock_movements table if online
       if (isOnline && user) {
-        const { error: adjustmentError } = await db
-          .from('stock_adjustments')
+        const { error: movementError } = await db
+          .from('stock_movements')
           .insert({
             product_id: id,
-            quantity_before: item.quantity,
-            quantity_after: newQuantity,
-            cost_price_at_time: item.cost_price || 0,
-            selling_price_at_time: item.price,
-            adjustment_type: newQuantity > item.quantity ? 'Increase' : 'Decrease',
+            quantity_change: newQuantity - item.quantity,
+            previous_quantity: item.quantity,
+            new_quantity: newQuantity,
+            type: 'ADJUSTMENT',
             reason: reason,
-            adjusted_by: user.id
+            created_by: user.id,
+            cost_price_at_time: item.cost_price || 0,
+            unit_price_at_time: item.price,
+            batch_number: item.batchNumber
           });
 
-        if (adjustmentError) {
-          console.error("Failed to log stock adjustment:", adjustmentError);
-          // We still proceed with the update, but log the error
+        if (movementError) {
+          console.error("Failed to log stock movement:", movementError);
         }
-      } else {
-        // Offline logging could be implemented here as well
-        // For now we rely on the main update item reflecting the change
       }
 
       // 2. Perform the actual stock update

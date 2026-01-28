@@ -4,28 +4,31 @@ import { db } from "@/lib/db-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOffline } from "@/contexts/OfflineContext";
 
-export interface StockAdjustment {
+export interface StockMovement {
     id: string;
     product_id: string;
-    quantity_before: number;
-    quantity_after: number;
-    cost_price_at_time: number;
-    selling_price_at_time: number;
-    adjustment_type: 'Increase' | 'Decrease';
+    quantity_change: number;
+    previous_quantity: number;
+    new_quantity: number;
+    type: 'SALE' | 'ADJUSTMENT' | 'ADDITION' | 'RETURN' | 'INITIAL';
     reason: string;
-    adjusted_by: string;
+    reference_id: string;
+    created_by: string;
     created_at: string;
-    product?: {
+    cost_price_at_time: number;
+    unit_price_at_time: number;
+    batch_number: string;
+    inventory?: {
         name: string;
         sku: string;
     };
-    user?: {
+    profiles?: {
         name: string;
     };
 }
 
 export const useStockAdjustments = (startDate?: string, endDate?: string) => {
-    const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
+    const [adjustments, setAdjustments] = useState<StockMovement[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { isOnline } = useOffline();
@@ -42,12 +45,13 @@ export const useStockAdjustments = (startDate?: string, endDate?: string) => {
             setError(null);
 
             let query = db
-                .from('stock_adjustments')
+                .from('stock_movements')
                 .select(`
           *,
-          product:inventory(name, sku),
-          user:profiles(name)
+          inventory:inventory(name, sku),
+          profiles:profiles(name)
         `)
+                .in('type', ['ADJUSTMENT', 'ADDITION', 'RETURN', 'INITIAL'])
                 .order('created_at', { ascending: false });
 
             if (startDate) {

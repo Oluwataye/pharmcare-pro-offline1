@@ -11,7 +11,8 @@ import {
   Users,
   History,
   Calendar,
-  Shield
+  Shield,
+  RefreshCcw
 } from "lucide-react";
 import InventoryReport from "@/components/reports/InventoryReport";
 import TransactionsReport from "@/components/reports/TransactionsReport";
@@ -88,20 +89,25 @@ const Reports = () => {
               <span className="hidden sm:inline">Inventory</span>
               <span className="sm:hidden">Inv</span>
             </TabsTrigger>
+            <TabsTrigger value="stock-adjustments" className="flex items-center gap-2 whitespace-nowrap">
+              <RefreshCcw className="h-4 w-4" />
+              <span className="hidden sm:inline">Stock Adjustments</span>
+              <span className="sm:hidden">Adj</span>
+            </TabsTrigger>
             <TabsTrigger value="transactions" className="flex items-center gap-2 whitespace-nowrap">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Transactions</span>
               <span className="sm:hidden">Trans</span>
             </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2 whitespace-nowrap">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">User Audit</span>
-              <span className="sm:hidden">Users</span>
-            </TabsTrigger>
             <TabsTrigger value="sales" className="flex items-center gap-2 whitespace-nowrap">
               <ShoppingCart className="h-4 w-4" />
               <span className="hidden sm:inline">Sales</span>
               <span className="sm:hidden">Sales</span>
+            </TabsTrigger>
+            <TabsTrigger value="users" className="flex items-center gap-2 whitespace-nowrap">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">User Audit</span>
+              <span className="sm:hidden">Users</span>
             </TabsTrigger>
             <TabsTrigger value="audit" className="flex items-center gap-2 whitespace-nowrap">
               <History className="h-4 w-4" />
@@ -117,11 +123,6 @@ const Reports = () => {
                   !
                 </span>
               )}
-            </TabsTrigger>
-            <TabsTrigger value="stock-adjustments" className="flex items-center gap-2 whitespace-nowrap">
-              <Package className="h-4 w-4" />
-              <span className="hidden sm:inline">Stock Adjustments</span>
-              <span className="sm:hidden">Adjust</span>
             </TabsTrigger>
             {user?.role === 'SUPER_ADMIN' && (
               <TabsTrigger value="security" className="flex items-center gap-2 whitespace-nowrap">
