@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, Package, AlertTriangle, DollarSign, Activity } from "lucide-react";
+import { TrendingUp, Package, AlertTriangle, Activity } from "lucide-react";
+import { NairaSign } from "../icons/NairaSign";
 import { WelcomeBanner } from "./WelcomeBanner";
 import { EnhancedStatCard } from "./EnhancedStatCard";
 import { EnhancedTransactionsCard } from "./EnhancedTransactionsCard";
@@ -117,11 +118,11 @@ const AdminDashboardContent = () => {
     {
       title: "Today's Sales",
       value: `₦${todaySales.toLocaleString()}`,
-      icon: DollarSign,
+      icon: NairaSign,
       trend: "Current",
       trendUp: true,
       route: "/sales",
-      colorScheme: 'success' as const,
+      colorScheme: 'primary' as const,
       size: 'large' as const,
       comparisonLabel: "Real-time updates"
     },
@@ -158,7 +159,7 @@ const AdminDashboardContent = () => {
     {
       title: "Revenue (MTD)",
       value: `₦${mtdRevenue.toLocaleString()}`,
-      icon: TrendingUp,
+      icon: NairaSign,
       trend: "Monthly",
       trendUp: true,
       route: "/reports",

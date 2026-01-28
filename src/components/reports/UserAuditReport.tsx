@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/table";
 import { db } from "@/lib/db-client";
 import { format } from "date-fns";
-import { Loader2, User, Award, DollarSign } from "lucide-react";
+import { Loader2, User, Award } from "lucide-react";
+import { NairaSign } from "../icons/NairaSign";
 import { Badge } from "@/components/ui/badge";
 
 const UserAuditReport = () => {

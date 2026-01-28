@@ -27,7 +27,7 @@ export const CashierStatsCards = ({ statsCards, handleCardClick }: CashierStatsC
 
         let colorScheme: 'primary' | 'success' | 'warning' | 'danger' = 'primary';
         if (card.title === "Low Stock Items") colorScheme = 'warning';
-        if (card.title === "Today's Sales") colorScheme = 'success';
+        if (card.title === "Today's Sales") colorScheme = 'primary';
 
         return (
           <EnhancedStatCard

@@ -67,8 +67,8 @@ const isValidUUID = (uuid) => {
 const ALLOWED_TABLES = [
     'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
     'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
-    'audit_logs', 'system_logs', 'store_settings', 'payment_records',
-    'system_configs', 'database_backups'
+    'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements',
+    'system_configs', 'database_backups', 'stock_movements'
 ];
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -782,12 +782,121 @@ app.get('/api/receipts', requireAuth, async (req, res) => {
             query += ' ORDER BY r.created_at DESC';
         }
 
-        const [rows] = await safeQuery(query, params);
+        const [rows] = await pool.query(query, params);
         res.json(rows);
     } catch (err) {
         logToFile(`RECEIPTS ERROR: ${err.message}`);
         console.error(err);
         res.status(500).json({ error: 'Failed to fetch receipts' });
+    }
+});
+
+// --- CUSTOM HANDLER FOR STOCK MOVEMENTS (Fixes Join Issues for Report) ---
+app.get('/api/stock_movements', requireAuth, async (req, res) => {
+    try {
+        let query = `
+            SELECT 
+                sm.*,
+                i.name as inventory_name,
+                i.sku as inventory_sku,
+                p.name as profile_name
+            FROM stock_movements sm
+            LEFT JOIN inventory i ON sm.product_id = i.id
+            LEFT JOIN profiles p ON sm.created_by = p.user_id
+        `;
+        const params = [];
+        const conditions = [];
+
+        // Handle PostgREST style filters (eq., gte., lte., etc.)
+        Object.entries(req.query).forEach(([key, val]) => {
+            if (['order', 'limit', 'select', 'offset'].includes(key)) return;
+
+            const safeCol = key.replace(/[^a-z0-9_]/gi, '');
+            // Check if column exists in stock_movements (prevent injection)
+            const smCols = ['id', 'product_id', 'quantity_change', 'previous_quantity', 'new_quantity', 'type', 'reason', 'reference_id', 'created_by', 'created_at', 'cost_price_at_time', 'unit_price_at_time', 'batch_number'];
+            if (!smCols.includes(safeCol)) return;
+
+            const valueStr = String(val);
+            const parts = valueStr.split('.');
+            const op = parts[0];
+            let cleanVal = parts.length > 1 ? parts.slice(1).join('.') : valueStr;
+
+            // Robust Date Handling for MySQL
+            if (cleanVal.includes('202') && (cleanVal.includes('T') || cleanVal.includes('-'))) {
+                cleanVal = cleanVal.replace('T', ' ').replace('Z', '').split('.')[0];
+            }
+
+            switch (op) {
+                case 'eq':
+                    conditions.push(`sm.${safeCol} = ?`);
+                    params.push(cleanVal);
+                    break;
+                case 'gte':
+                    conditions.push(`sm.${safeCol} >= ?`);
+                    params.push(cleanVal);
+                    break;
+                case 'lte':
+                    conditions.push(`sm.${safeCol} <= ?`);
+                    params.push(cleanVal);
+                    break;
+                case 'gt':
+                    conditions.push(`sm.${safeCol} > ?`);
+                    params.push(cleanVal);
+                    break;
+                case 'lt':
+                    conditions.push(`sm.${safeCol} < ?`);
+                    params.push(cleanVal);
+                    break;
+                case 'in':
+                    const list = cleanVal.replace('(', '').replace(')', '').split(',');
+                    conditions.push(`sm.${safeCol} IN (${list.map(() => '?').join(',')})`);
+                    params.push(...list);
+                    break;
+                default:
+                    // Default to equality if no operator is provided or if it's just a raw value
+                    conditions.push(`sm.${safeCol} = ?`);
+                    params.push(cleanVal);
+            }
+        });
+
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+
+        // Handle ordering
+        if (req.query.order) {
+            const [col, dir] = req.query.order.split('.');
+            const safeCol = col.replace(/[^a-z0-9_]/gi, '');
+            const safeDir = (dir && dir.toLowerCase() === 'desc') ? 'DESC' : 'ASC';
+            query += ` ORDER BY sm.${safeCol} ${safeDir}`;
+        } else {
+            query += ' ORDER BY sm.created_at DESC';
+        }
+
+        // Handle limit
+        if (req.query.limit) {
+            query += ` LIMIT ${parseInt(req.query.limit)}`;
+        }
+
+        const [rows] = await pool.query(query, params);
+
+        // Map the flat rows to nested objects expected by the frontend
+        const mappedRows = rows.map(row => ({
+            ...row,
+            inventory: {
+                name: row.inventory_name || 'Unknown Product',
+                sku: row.inventory_sku || 'NO-SKU'
+            },
+            profiles: {
+                name: row.profile_name || 'System'
+            }
+        }));
+
+        res.json(mappedRows);
+    } catch (err) {
+        logToFile(`STOCK_MOVEMENTS ERROR: ${err.message}`);
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch stock movements' });
     }
 });
 
@@ -1005,7 +1114,7 @@ app.post('/api/:table', requireAuth, async (req, res) => {
         const allowedTables = [
             'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
             'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
-            'audit_logs', 'system_logs', 'store_settings', 'payment_records'
+            'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements'
         ];
 
         if (!allowedTables.includes(table)) {
@@ -1313,7 +1422,7 @@ app.delete('/api/:table', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res
         const allowedTables = [
             'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
             'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
-            'audit_logs', 'system_logs', 'store_settings', 'payment_records'
+            'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements'
         ];
 
         if (!allowedTables.includes(table)) {

@@ -10,7 +10,8 @@ import { TransactionsTable } from "./TransactionsTable";
 import { NewSaleForm } from "./NewSaleForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRefundAnalytics } from "@/hooks/sales/useRefundAnalytics";
-import { AlertTriangle, DollarSign, Receipt, RefreshCcw } from "lucide-react";
+import { AlertTriangle, Receipt, RefreshCcw } from "lucide-react";
+import { NairaSign } from "../icons/NairaSign";
 import { db } from "@/lib/db-client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -151,7 +152,7 @@ export const DispenserDashboardContent = () => {
         {
             title: "Today's Sales",
             value: `₦${todaysSales.toLocaleString()}`,
-            icon: DollarSign,
+            icon: NairaSign,
             description: "For this shift",
             iconColor: "text-primary",
             route: "/sales"

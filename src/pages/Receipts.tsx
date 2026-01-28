@@ -14,7 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EnhancedCard } from "@/components/ui/EnhancedCard";
-import { Printer, Receipt, Loader2, DollarSign } from "lucide-react";
+import { Printer, Receipt, Loader2 } from "lucide-react";
+import { NairaSign } from "@/components/icons/NairaSign";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -235,7 +236,7 @@ const Receipts = () => {
                               title="Request Refund"
                               className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
                             >
-                              <DollarSign className="h-4 w-4" />
+                              <NairaSign className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>

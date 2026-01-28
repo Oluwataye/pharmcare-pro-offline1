@@ -214,20 +214,38 @@ async function initDB() {
       );`,
 
       `CREATE TABLE IF NOT EXISTS audit_logs (
-        id VARCHAR(36) PRIMARY KEY,
-        user_id VARCHAR(36),
-        user_email VARCHAR(255),
-        user_role VARCHAR(50),
-        event_type VARCHAR(100),
-        action TEXT,
-        status VARCHAR(20) DEFAULT 'success',
-        resource_type VARCHAR(100),
-        resource_id VARCHAR(36),
-        error_message TEXT,
-        details JSON,
-        ip_address VARCHAR(50),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );`
+          id VARCHAR(36) PRIMARY KEY,
+          user_id VARCHAR(36),
+          user_email VARCHAR(255),
+          user_role VARCHAR(50),
+          event_type VARCHAR(100),
+          action TEXT,
+          status VARCHAR(20) DEFAULT 'success',
+          resource_type VARCHAR(100),
+          resource_id VARCHAR(36),
+          error_message TEXT,
+          details JSON,
+          ip_address VARCHAR(50),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );`,
+
+      `CREATE TABLE IF NOT EXISTS stock_movements (
+          id VARCHAR(36) PRIMARY KEY,
+          product_id VARCHAR(36) NOT NULL,
+          quantity_change INTEGER NOT NULL,
+          previous_quantity INTEGER NOT NULL,
+          new_quantity INTEGER NOT NULL,
+          type ENUM('SALE', 'ADJUSTMENT', 'ADDITION', 'RETURN', 'INITIAL') NOT NULL,
+          reason TEXT,
+          reference_id VARCHAR(36),
+          created_by VARCHAR(36),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          cost_price_at_time DECIMAL(10, 2),
+          unit_price_at_time DECIMAL(10, 2),
+          batch_number VARCHAR(100),
+          FOREIGN KEY (product_id) REFERENCES inventory(id),
+          FOREIGN KEY (created_by) REFERENCES users(id)
+        );`
     ];
 
     for (const sql of tables) {
