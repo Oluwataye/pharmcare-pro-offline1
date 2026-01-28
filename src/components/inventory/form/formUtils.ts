@@ -24,6 +24,7 @@ export const initialInventoryFormState = {
   manufacturer: "",
   batchNumber: "",
   cost_price: 0,
+  profit_margin: 0,
   supplier_id: "",
   restock_invoice_number: "",
 };

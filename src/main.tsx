@@ -6,6 +6,19 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import App from './App.tsx'
 import './index.css'
 
+// --- HANDLE STARTUP RESET ---
+// If the app is launched via script with ?startup=1, we force a clean session
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('startup') === '1') {
+  console.log('[Startup] Detected startup flag. Clearing session and cache...');
+  sessionStorage.clear();
+  localStorage.removeItem('PHARMACARE_CACHE');
+
+  // Clean URL without reloading
+  const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+  window.history.replaceState({ path: newUrl }, '', newUrl);
+}
+
 // Create a client with enhanced offline capabilities
 const queryClient = new QueryClient({
   defaultOptions: {

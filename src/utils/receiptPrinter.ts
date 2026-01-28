@@ -301,6 +301,22 @@ function generateReceiptHTML(props: PrintReceiptProps): string {
         .total {
           font-weight: bold;
         }
+        /* Watermark Overlay for Security */
+        .watermark {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(-45deg);
+          font-size: 32px;
+          color: rgba(0, 0, 0, 0.05); /* Very light grey */
+          font-weight: bold;
+          white-space: nowrap;
+          z-index: -1;
+          pointer-events: none;
+          text-transform: uppercase;
+          width: 100%;
+          text-align: center;
+        }
         .footer {
           text-align: center;
           margin-top: 20px;
@@ -321,6 +337,7 @@ function generateReceiptHTML(props: PrintReceiptProps): string {
         }
         @media print {
           .print-btn { display: none; }
+          .watermark { color: rgba(0, 0, 0, 0.1) !important; -webkit-print-color-adjust: exact; } /* Slightly darker for print */
           body {
             margin: 0;
             padding: 10px;
@@ -333,6 +350,7 @@ function generateReceiptHTML(props: PrintReceiptProps): string {
       </style>
     </head>
     <body onload="window.focus();">
+      <div class="watermark">PharmCare Pro - Official Receipt</div>
       <div class="header">
         ${storeSettings.print_show_logo && logo ? `<img src="${logo}" alt="Store Logo" class="logo" />` : ''}
         <div class="business-name">${storeName}</div>

@@ -1,34 +1,18 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useToast } from '@/hooks/use-toast';
 
 interface OfflineContextType {
-  isOnline: boolean;
+  isOnline: boolean; // Now represents "Local Server Reachable"
   lastOnlineTime: Date | null;
-  syncPending: boolean;
-  pendingCount: number;
-  isSyncing: boolean;
-  syncData: () => Promise<void>;
-  addPendingOperation: (operation: PendingOperation) => void;
-  clearPendingOperations: () => void;
-}
-
-export interface PendingOperation {
-  id: string;
-  type: 'create' | 'update' | 'delete';
-  resource: string;
-  data?: unknown;
-  timestamp: number;
+  serverStatus: 'connected' | 'disconnected' | 'checking';
+  checkConnectivity: () => Promise<void>;
 }
 
 const defaultOfflineContext: OfflineContextType = {
-  isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
-  lastOnlineTime: typeof navigator !== 'undefined' && navigator.onLine ? new Date() : null,
-  syncPending: false,
-  pendingCount: 0,
-  isSyncing: false,
-  syncData: async () => { },
-  addPendingOperation: () => { },
-  clearPendingOperations: () => { },
+  isOnline: true,
+  lastOnlineTime: new Date(),
+  serverStatus: 'connected',
+  checkConnectivity: async () => { },
 };
 
 const OfflineContext = createContext<OfflineContextType>(defaultOfflineContext);
@@ -40,153 +24,73 @@ interface OfflineProviderProps {
 }
 
 export const OfflineProvider = ({ children }: OfflineProviderProps) => {
-  const IS_OFFLINE_MODE =
-    import.meta.env.VITE_APP_MODE === 'offline' ||
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === 'pharmcarepro';
-
-  const [isOnline, setIsOnline] = useState(IS_OFFLINE_MODE ? true : (typeof navigator !== 'undefined' ? navigator.onLine : true));
-  const [lastOnlineTime, setLastOnlineTime] = useState<Date | null>(
-    (IS_OFFLINE_MODE || (typeof navigator !== 'undefined' && navigator.onLine)) ? new Date() : null
-  );
-  const [syncPending, setSyncPending] = useState(false);
-  const [pendingOperations, setPendingOperations] = useState<PendingOperation[]>([]);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [lastOnlineTime, setLastOnlineTime] = useState<Date | null>(new Date());
+  const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected' | 'checking'>('connected');
   const { toast } = useToast();
 
-  useEffect(() => {
-    console.log(`[Offline Context] Connectivity Check: isOnline=${isOnline}, Mode=${import.meta.env.VITE_APP_MODE}`);
-  }, [isOnline]);
+  const API_URL = `${window.location.protocol}//${window.location.hostname}:80/api/health`;
 
-  // Load pending operations from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem('PENDING_OPERATIONS');
-    if (stored) {
-      try {
-        const operations = JSON.parse(stored) as PendingOperation[];
-        setPendingOperations(operations);
-        if (operations.length > 0) {
-          setSyncPending(true);
-        }
-      } catch (e) {
-        console.error('Failed to parse pending operations:', e);
-      }
-    }
-
-    const storedLastOnlineTime = localStorage.getItem('LAST_ONLINE_TIME');
-    if (storedLastOnlineTime) {
-      setLastOnlineTime(new Date(storedLastOnlineTime));
-    }
-  }, []);
-
-  // Save pending operations to localStorage
-  useEffect(() => {
-    localStorage.setItem('PENDING_OPERATIONS', JSON.stringify(pendingOperations));
-    localStorage.setItem('SYNC_PENDING', pendingOperations.length > 0 ? 'true' : 'false');
-    setSyncPending(pendingOperations.length > 0);
-  }, [pendingOperations]);
-
-  const addPendingOperation = useCallback((operation: PendingOperation) => {
-    setPendingOperations(prev => [...prev, operation]);
-  }, []);
-
-  const clearPendingOperations = useCallback(() => {
-    setPendingOperations([]);
-  }, []);
-
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      const now = new Date();
-      setLastOnlineTime(now);
-      localStorage.setItem('LAST_ONLINE_TIME', now.toISOString());
-      console.log('[Offline Context] Browser online event.');
-    };
-
-    const handleOffline = () => {
-      // NEVER go offline if we are in standalone mode hitting a local server
-      if (IS_OFFLINE_MODE) {
-        console.log('[Offline Context] Local server remains reachable; ignoring browser offline event.');
-        setIsOnline(true);
-        return;
-      }
-
-      setIsOnline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [toast, pendingOperations.length]);
-
-  const syncData = useCallback(async () => {
-    if (!isOnline) {
-      toast({
-        title: "Cannot Sync",
-        description: "You are currently offline. Data will sync automatically when you're back online.",
-      });
-      return;
-    }
-
-    if (pendingOperations.length === 0) {
-      toast({
-        title: "Already Synced",
-        description: "All changes are up to date.",
-      });
-      return;
-    }
-
+  const checkConnectivity = async () => {
     try {
-      setIsSyncing(true);
-      toast({
-        title: "Syncing Data",
-        description: `Synchronizing ${pendingOperations.length} offline change(s)...`,
+      setServerStatus('checking');
+      // Timeout after 2 seconds to fail fast
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 2000);
+
+      const response = await fetch(API_URL, {
+        method: 'GET',
+        signal: controller.signal
       });
 
-      // Process each pending operation
-      // In a real app, this would make API calls
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      clearTimeout(id);
 
-      clearPendingOperations();
-
-      toast({
-        title: "Sync Complete",
-        description: "Your data has been successfully synchronized.",
-      });
+      if (response.ok) {
+        if (!isOnline) {
+          console.log('[Offline Context] Reconnected to local server.');
+          toast({
+            title: "System Online",
+            description: "Connected to local database server.",
+          });
+        }
+        setIsOnline(true);
+        setServerStatus('connected');
+        setLastOnlineTime(new Date());
+      } else {
+        throw new Error('Server returned error');
+      }
     } catch (error) {
-      toast({
-        title: "Sync Error",
-        description: error instanceof Error ? error.message : "Failed to sync data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSyncing(false);
+      if (isOnline) {
+        console.warn('[Offline Context] Lost connection to local server.');
+        toast({
+          title: "Connection Lost",
+          description: "Cannot reach local database server. Please check if the server is running.",
+          variant: "destructive",
+        });
+      }
+      setIsOnline(false);
+      setServerStatus('disconnected');
     }
-  }, [isOnline, pendingOperations, clearPendingOperations, toast]);
+  };
 
-  // Auto-sync when coming back online
+  // Initial Check
   useEffect(() => {
-    if (isOnline && pendingOperations.length > 0 && !isSyncing) {
-      const timer = setTimeout(() => syncData(), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isOnline, pendingOperations.length, isSyncing, syncData]);
+    checkConnectivity();
+  }, []);
+
+  // Periodic Heartbeat (every 10 seconds)
+  useEffect(() => {
+    const interval = setInterval(checkConnectivity, 10000);
+    return () => clearInterval(interval);
+  }, [isOnline]); // Dep on isOnline to avoid stale closure if we expanded logic
 
   return (
     <OfflineContext.Provider
       value={{
         isOnline,
         lastOnlineTime,
-        syncPending,
-        pendingCount: pendingOperations.length,
-        isSyncing,
-        syncData,
-        addPendingOperation,
-        clearPendingOperations,
+        serverStatus,
+        checkConnectivity,
       }}
     >
       {children}

@@ -21,6 +21,7 @@ import TransactionAuditLog from "@/components/reports/TransactionAuditLog";
 import ExpiringDrugsReport from "@/components/reports/ExpiringDrugsReport";
 import { AuditLogReport } from "@/components/reports/AuditLogReport";
 import { ExpiryNotificationModal } from "@/components/reports/ExpiryNotificationModal";
+import StockAdjustmentReport from "@/components/reports/StockAdjustmentReport";
 import { Spinner } from "@/components/ui/spinner";
 import { useInventory } from "@/hooks/useInventory";
 import { useAuth } from "@/contexts/AuthContext";
@@ -117,6 +118,11 @@ const Reports = () => {
                 </span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="stock-adjustments" className="flex items-center gap-2 whitespace-nowrap">
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline">Stock Adjustments</span>
+              <span className="sm:hidden">Adjust</span>
+            </TabsTrigger>
             {user?.role === 'SUPER_ADMIN' && (
               <TabsTrigger value="security" className="flex items-center gap-2 whitespace-nowrap">
                 <Shield className="h-4 w-4" />
@@ -157,6 +163,10 @@ const Reports = () => {
 
             <TabsContent value="expiring">
               <ExpiringDrugsReport />
+            </TabsContent>
+
+            <TabsContent value="stock-adjustments">
+              <StockAdjustmentReport />
             </TabsContent>
 
             {user?.role === 'SUPER_ADMIN' && (

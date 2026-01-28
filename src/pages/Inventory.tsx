@@ -37,7 +37,8 @@ const Inventory = () => {
     getCategories,
     getExpiringItems,
     handleRefresh,
-    handlePrint
+    handlePrint,
+    adjustStock
   } = useInventory();
   const location = useLocation();
 
@@ -142,6 +143,7 @@ const Inventory = () => {
               onDeleteItem={deleteItem}
               onUpdateItem={updateItem}
               onBatchDelete={batchDelete}
+              onAdjustStock={adjustStock}
             />
           </div>
         </CardContent>

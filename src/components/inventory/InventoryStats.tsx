@@ -31,7 +31,7 @@ export const InventoryStats = ({ inventory }: InventoryStatsProps) => {
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
       <EnhancedStatCard
         title="Total Products"
         value={inventory.length.toString()}
@@ -41,10 +41,10 @@ export const InventoryStats = ({ inventory }: InventoryStatsProps) => {
         route="/inventory"
         onClick={handleCardClick}
         colorScheme="primary"
-        comparisonLabel="Total inventory items"
+        comparisonLabel="Total items"
       />
       <EnhancedStatCard
-        title="Low Stock Items"
+        title="Low Stock"
         value={lowStockCount.toString()}
         icon={PackageOpen}
         trend=""
@@ -52,18 +52,40 @@ export const InventoryStats = ({ inventory }: InventoryStatsProps) => {
         route="/inventory"
         onClick={handleCardClick}
         colorScheme="warning"
-        comparisonLabel="Requires attention"
+        comparisonLabel="Action needed"
       />
       <EnhancedStatCard
-        title="Total Value"
+        title="Total Cost"
+        value={`₦${inventory.reduce((acc, item) => acc + (item.cost_price || 0) * item.quantity, 0).toLocaleString()}`}
+        icon={TrendingUp} // Use a relevant icon
+        trend=""
+        trendUp={true}
+        route="/inventory"
+        onClick={handleCardClick}
+        colorScheme="primary" // Different shade maybe?
+        comparisonLabel="Inventory cost"
+      />
+      <EnhancedStatCard
+        title="Est. Profit"
+        value={`₦${(totalValue - inventory.reduce((acc, item) => acc + (item.cost_price || 0) * item.quantity, 0)).toLocaleString()}`}
+        icon={TrendingUp}
+        trend=""
+        trendUp={true}
+        route="/inventory"
+        onClick={handleCardClick}
+        colorScheme="success"
+        comparisonLabel="Potential margin"
+      />
+      <EnhancedStatCard
+        title="Retail Value"
         value={`₦${totalValue.toLocaleString()}`}
         icon={Package}
         trend=""
         trendUp={true}
         route="/inventory"
         onClick={handleCardClick}
-        colorScheme="success"
-        comparisonLabel="Estimated inventory value"
+        colorScheme="primary"
+        comparisonLabel="Sales value"
       />
     </div>
   );

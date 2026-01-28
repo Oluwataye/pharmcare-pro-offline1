@@ -33,15 +33,24 @@ const ProductSearchSection = ({ onAddProduct, isWholesale = false }: ProductSear
 
         if (error) throw error;
 
-        // Map inventory to Product format
-        const mappedProducts: Product[] = data.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: Number(item.price),
-          wholesalePrice: Number(item.price) * 0.85, // 15% discount for wholesale
-          minWholesaleQuantity: 5, // Default minimum
-          stock: item.quantity
-        }));
+        // Map inventory to Product format and filter expired
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const mappedProducts: Product[] = data
+          .filter(item => {
+            if (!item.expiry_date) return true; // Assume safe if no date, but ideally all should have one
+            const expiry = new Date(item.expiry_date);
+            return expiry >= today;
+          })
+          .map(item => ({
+            id: item.id,
+            name: item.name,
+            price: Number(item.price || item.unit_price), // Map both for robustness
+            wholesalePrice: Number(item.price || item.unit_price) * 0.85,
+            minWholesaleQuantity: 5,
+            stock: item.quantity
+          }));
 
         setProducts(mappedProducts);
       } catch (error) {
@@ -61,7 +70,7 @@ const ProductSearchSection = ({ onAddProduct, isWholesale = false }: ProductSear
     // Set up realtime subscription for inventory updates
     const channel = db
       .channel('inventory-changes')
-      .on('postgres_changes', 
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'inventory' },
         () => {
           fetchProducts();
@@ -76,7 +85,7 @@ const ProductSearchSection = ({ onAddProduct, isWholesale = false }: ProductSear
 
   const searchProducts = (term: string): Product[] => {
     if (!term.trim()) return [];
-    return products.filter(p => 
+    return products.filter(p =>
       p.name.toLowerCase().includes(term.toLowerCase())
     );
   };
@@ -111,9 +120,9 @@ const ProductSearchSection = ({ onAddProduct, isWholesale = false }: ProductSear
     }
 
     // If wholesale and quantity meets minimum threshold, suggest wholesale price
-    if (isWholesale && 
-        selectedProduct.minWholesaleQuantity && 
-        quantity < selectedProduct.minWholesaleQuantity) {
+    if (isWholesale &&
+      selectedProduct.minWholesaleQuantity &&
+      quantity < selectedProduct.minWholesaleQuantity) {
       toast({
         title: "Wholesale Information",
         description: `Minimum quantity for wholesale pricing is ${selectedProduct.minWholesaleQuantity}`,
@@ -175,7 +184,7 @@ const ProductSearchSection = ({ onAddProduct, isWholesale = false }: ProductSear
             <Plus className="mr-2 h-4 w-4" />
             Add Item
           </Button>
-          
+
           {isWholesale && selectedProduct.wholesalePrice && selectedProduct.minWholesaleQuantity && (
             <Badge variant="outline" className="ml-auto">
               <Package className="h-3 w-3 mr-1" />

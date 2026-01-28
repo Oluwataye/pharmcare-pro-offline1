@@ -10,19 +10,19 @@ interface InventoryTableHeadProps {
   onSelectAll: (checked: boolean) => void;
 }
 
-export const InventoryTableHead = ({ 
-  showBatchActions, 
-  hasItems, 
-  allSelected, 
-  onSelectAll 
+export const InventoryTableHead = ({
+  showBatchActions,
+  hasItems,
+  allSelected,
+  onSelectAll
 }: InventoryTableHeadProps) => {
   return (
     <TableHeader>
       <TableRow>
         {showBatchActions && (
           <TableHead className="w-[40px]">
-            <Checkbox 
-              checked={hasItems && allSelected} 
+            <Checkbox
+              checked={hasItems && allSelected}
               onCheckedChange={onSelectAll}
               disabled={!hasItems}
             />
@@ -34,6 +34,8 @@ export const InventoryTableHead = ({
         <TableHead>Stock Status</TableHead>
         <TableHead>Expiry</TableHead>
         <TableHead className="text-right">Quantity</TableHead>
+        <TableHead className="text-right">Cost</TableHead>
+        <TableHead className="text-right">Margin</TableHead>
         <TableHead className="text-right">Price</TableHead>
         <TableHead className="text-right">Actions</TableHead>
       </TableRow>

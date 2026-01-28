@@ -112,22 +112,72 @@ export const EditInventoryForm = ({
           label="Cost Price (₦)"
           type="number"
           value={formData.cost_price || 0}
-          onChange={(value) => handleInputChange("cost_price", parseFloat(value) || 0)}
+          onChange={(value) => {
+            const cost = parseFloat(value) || 0;
+            const margin = formData.profit_margin || 0;
+            const price = margin > 0 ? cost + (cost * (margin / 100)) : formData.price; // Markup logic
+            setFormData({
+              ...formData,
+              cost_price: cost,
+              price: parseFloat(price.toFixed(2))
+            });
+          }}
           required
           min="0"
           step="0.01"
         />
 
         <TextField
-          id="edit-price"
-          label="Selling Price (₦)"
+          id="edit-profit-margin"
+          label="Profit Margin (%)"
           type="number"
-          value={formData.price}
-          onChange={(value) => handleInputChange("price", parseFloat(value) || 0)}
-          required
+          value={formData.profit_margin || 0}
+          onChange={(value) => {
+            const margin = parseFloat(value) || 0;
+            const cost = formData.cost_price || 0;
+            const price = cost + (cost * (margin / 100));
+            setFormData({
+              ...formData,
+              profit_margin: margin,
+              price: parseFloat(price.toFixed(2))
+            });
+          }}
           min="0"
-          step="0.01"
+          step="0.1"
+          placeholder="0"
         />
+
+        <div className="space-y-1">
+          <TextField
+            id="edit-price"
+            label="Selling Price (₦)"
+            type="number"
+            value={formData.price}
+            onChange={(value) => {
+              const price = parseFloat(value) || 0;
+              const cost = formData.cost_price || 0;
+              // Calculate margin from price
+              const margin = cost > 0 ? ((price - cost) / cost) * 100 : 0;
+              setFormData({
+                ...formData,
+                price: price,
+                profit_margin: parseFloat(margin.toFixed(1))
+              });
+            }}
+            required
+            min="0"
+            step="0.01"
+          />
+          {(formData.price > 0 || (formData.cost_price || 0) > 0) && (
+            <div className="flex items-center justify-between text-xs px-1">
+              <span className="text-muted-foreground">
+                Profit: <span className={formData.price >= (formData.cost_price || 0) ? "text-green-600 font-medium" : "text-destructive font-medium"}>
+                  ₦{(formData.price - (formData.cost_price || 0)).toLocaleString()}
+                </span>
+              </span>
+            </div>
+          )}
+        </div>
 
         <TextField
           id="edit-reorderLevel"

@@ -97,6 +97,8 @@ async function initDB() {
         quantity INTEGER DEFAULT 0,
         unit VARCHAR(50),
         unit_price DECIMAL(10,2) NOT NULL,
+        wholesale_price DECIMAL(10,2),
+        min_wholesale_quantity INTEGER DEFAULT 5,
         cost_price DECIMAL(10,2),
         category VARCHAR(100),
         expiry_date DATE,

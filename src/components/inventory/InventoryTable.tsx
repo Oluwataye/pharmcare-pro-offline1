@@ -26,20 +26,25 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import { StockAdjustmentDialog } from "./dialog/StockAdjustmentDialog";
+
 interface InventoryTableProps {
   inventory: InventoryItem[];
   onDeleteItem: (id: string) => void;
   onUpdateItem: (id: string, updatedItem: InventoryItem) => void;
   onBatchDelete?: (ids: string[]) => void;
+  onAdjustStock?: (id: string, newQuantity: number, reason: string) => void;
 }
 
 export const InventoryTable = ({
   inventory,
   onDeleteItem,
   onUpdateItem,
-  onBatchDelete
+  onBatchDelete,
+  onAdjustStock
 }: InventoryTableProps) => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [adjustingItem, setAdjustingItem] = useState<InventoryItem | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
@@ -53,6 +58,18 @@ export const InventoryTable = ({
   const handleEdit = (itemId: string) => {
     const item = inventory.find(item => item.id === itemId);
     if (item) setEditingItem(item);
+  };
+
+  const handleAdjust = (itemId: string) => {
+    const item = inventory.find(item => item.id === itemId);
+    if (item) setAdjustingItem(item);
+  };
+
+  const handleAdjustSave = (id: string, newQuantity: number, reason: string) => {
+    if (onAdjustStock) {
+      onAdjustStock(id, newQuantity, reason);
+    }
+    setAdjustingItem(null);
   };
 
   const handleSave = (updatedItem: InventoryItem) => {
@@ -83,7 +100,7 @@ export const InventoryTable = ({
     }
   };
 
-  const colSpan = onBatchDelete ? 9 : 8;
+  const colSpan = onBatchDelete ? 11 : 10;
 
   return (
     <>
@@ -131,6 +148,21 @@ export const InventoryTable = ({
                       {item.quantity} {item.unit}
                     </TableCell>
                     <TableCell className="text-right">
+                      ₦{(item.cost_price || 0).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="font-medium text-green-600">
+                          ₦{(item.price - (item.cost_price || 0)).toLocaleString()}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {item.price > 0
+                            ? Math.round(((item.price - (item.cost_price || 0)) / item.price) * 100)
+                            : 0}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
                       ₦{item.price.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right">
@@ -138,6 +170,7 @@ export const InventoryTable = ({
                         itemId={item.id}
                         onEdit={() => handleEdit(item.id)}
                         onDelete={() => setDeleteConfirmId(item.id)}
+                        onAdjust={onAdjustStock ? () => handleAdjust(item.id) : undefined}
                       />
                     </TableCell>
                   </TableRow>
@@ -154,6 +187,15 @@ export const InventoryTable = ({
           onOpenChange={(open) => !open && setEditingItem(null)}
           item={editingItem}
           onSave={handleSave}
+        />
+      )}
+
+      {adjustingItem && (
+        <StockAdjustmentDialog
+          open={!!adjustingItem}
+          onOpenChange={(open) => !open && setAdjustingItem(null)}
+          item={adjustingItem}
+          onSave={handleAdjustSave}
         />
       )}
 

@@ -8,7 +8,8 @@ import {
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, CartesianGrid, ComposedChart, Line, Legend, Bar } from "recharts";
 import { db } from "@/lib/db-client";
 import { format, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval } from "date-fns";
-import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Percent } from "lucide-react";
+import { NairaSign } from "@/components/icons/NairaSign";
 
 const SalesReport = () => {
   const [salesData, setSalesData] = useState<any[]>([]);
@@ -118,7 +119,7 @@ const SalesReport = () => {
         <MetricCard
           title="Total Revenue"
           value={`₦${totalRevenue.toLocaleString()}`}
-          icon={<DollarSign className="h-4 w-4 text-blue-600" />}
+          icon={<NairaSign className="h-4 w-4 text-blue-600" />}
           desc="Last 6 months combined"
           loading={isLoading}
           colorScheme="primary"

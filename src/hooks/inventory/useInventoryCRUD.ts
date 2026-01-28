@@ -245,10 +245,52 @@ export const useInventoryCRUD = () => {
     }
   };
 
+  const adjustStock = async (id: string, newQuantity: number, reason: string) => {
+    const item = inventory.find(i => i.id === id);
+    if (!item) return;
+
+    try {
+      // 1. Record the adjustment in the audit table if online
+      if (isOnline && user) {
+        const { error: adjustmentError } = await db
+          .from('stock_adjustments')
+          .insert({
+            product_id: id,
+            quantity_before: item.quantity,
+            quantity_after: newQuantity,
+            cost_price_at_time: item.cost_price || 0,
+            selling_price_at_time: item.price,
+            adjustment_type: newQuantity > item.quantity ? 'Increase' : 'Decrease',
+            reason: reason,
+            adjusted_by: user.id
+          });
+
+        if (adjustmentError) {
+          console.error("Failed to log stock adjustment:", adjustmentError);
+          // We still proceed with the update, but log the error
+        }
+      } else {
+        // Offline logging could be implemented here as well
+        // For now we rely on the main update item reflecting the change
+      }
+
+      // 2. Perform the actual stock update
+      await updateItem(id, { ...item, quantity: newQuantity });
+    } catch (error) {
+      console.error("Error during stock adjustment:", error);
+      toast({
+        title: "Adjustment Error",
+        description: "Failed to record or update stock adjustment.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return {
     addItem,
     updateItem,
     deleteItem,
     batchDelete,
+    adjustStock,
   };
 };

@@ -15,6 +15,7 @@ export interface InventoryItem {
   lastUpdatedAt?: string;
   user_id?: string;
   cost_price?: number;
+  profit_margin?: number;
   supplier_id?: string;
   restock_invoice_number?: string;
 }

@@ -153,7 +153,7 @@ echo [5/5] Launching PharmCare Pro...
 timeout /t 2 /nobreak >nul
 
 :: Open browser
-start http://pharmcarepro/
+start http://pharmcarepro/?startup=1
 
 echo.
 echo ========================================

@@ -96,7 +96,9 @@ export const generateInventoryReport = (inventory: InventoryItem[], username: st
               <th>SKU</th>
               <th>Category</th>
               <th>Quantity</th>
+              <th>Cost Price</th>
               <th>Price</th>
+              <th>Margin</th>
               <th>Expiry Date</th>
               <th>Last Updated</th>
             </tr>
@@ -110,7 +112,9 @@ export const generateInventoryReport = (inventory: InventoryItem[], username: st
                 <td>${item.sku}</td>
                 <td>${item.category}</td>
                 <td>${item.quantity} ${item.unit}</td>
+                <td>₦${(item.cost_price || 0).toLocaleString()}</td>
                 <td>₦${item.price.toLocaleString()}</td>
+                <td>${item.price > 0 ? Math.round(((item.price - (item.cost_price || 0)) / item.price) * 100) : 0}%</td>
                 <td>${item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A'}</td>
                 <td>${item.lastUpdatedBy || 'Unknown'} (${item.lastUpdatedAt ? new Date(item.lastUpdatedAt).toLocaleDateString() : 'N/A'})</td>
               </tr>

@@ -59,6 +59,29 @@ const formatForMySQL = (val) => {
     return val;
 };
 
+const isValidUUID = (uuid) => {
+    const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return regex.test(uuid);
+};
+
+const ALLOWED_TABLES = [
+    'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
+    'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
+    'audit_logs', 'system_logs', 'store_settings', 'payment_records',
+    'system_configs', 'database_backups'
+];
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    debugLogger.log(`CRIT-UNHANDLED-REJECTION: ${reason}`);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception thrown:', err);
+    debugLogger.log(`CRIT-UNCAUGHT-EXCEPTION: ${err.message}`);
+});
+
+
 const logAuditEvent = async (connection, params) => {
     let {
         userId, userEmail, userRole, eventType, action,
@@ -176,22 +199,47 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- AUTHENTICATION MIDDLEWARE ---
+// --- AUTHENTICATION & RBAC MIDDLEWARE ---
 const authenticateUser = (req, res, next) => {
     const authHeader = req.headers.authorization;
-    if (authHeader) {
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, process.env.JWT_SECRET || 'offline_secret_key_change_me', (err, user) => {
-            if (err) {
-                logToFile(`AUTH-ERROR: Invalid token - ${err.message}`);
-            } else {
-                req.user = user; // { id, email, role }
-            }
-            next();
-        });
-    } else {
-        next();
+    if (!authHeader) {
+        req.user = null;
+        return next();
     }
+
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.JWT_SECRET || 'offline_secret_key_change_me', (err, user) => {
+        if (err) {
+            logToFile(`AUTH-ERROR: Invalid token - ${err.message}`);
+            req.user = null;
+        } else {
+            req.user = user; // { id, email, role }
+        }
+        next();
+    });
+};
+
+const requireAuth = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized', message: 'Authentication required' });
+    }
+    next();
+};
+
+const requireRole = (roles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        const userRole = req.user.role.toUpperCase();
+        const allowedRoles = Array.isArray(roles) ? roles.map(r => r.toUpperCase()) : [roles.toUpperCase()];
+
+        if (!allowedRoles.includes(userRole) && userRole !== 'SUPER_ADMIN') {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted restricted access to ${req.originalUrl}`);
+            return res.status(403).json({ error: 'Forbidden', message: 'Insufficient privileges' });
+        }
+        next();
+    };
 };
 
 app.use(authenticateUser);
@@ -317,12 +365,14 @@ app.post('/api/auth/login', async (req, res) => {
 // --- CORE FUNCTIONALITY (Before Generic Handlers) ---
 
 // Inventory List (Explicit override for alphabetical sorting)
-app.get('/api/inventory', async (req, res) => {
+app.get('/api/inventory', requireAuth, async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM inventory ORDER BY name ASC');
         const mappedRows = rows.map(r => ({
             ...r,
             price: Number(r.unit_price) || 0,
+            wholesalePrice: Number(r.wholesale_price) || undefined,
+            minWholesaleQuantity: r.min_wholesale_quantity || 5,
             reorderLevel: r.low_stock_threshold || 10,
             batchNumber: r.batch_number,
             expiryDate: r.expiry_date,
@@ -335,7 +385,7 @@ app.get('/api/inventory', async (req, res) => {
     }
 });
 
-// Specialized Sales Handling (Bulk Optimized)
+// Specialized Sales Handling (Strict ACID Compliance)
 const handleSaleCreation = async (body, connection) => {
     const {
         id, user_id, total, items, payment_method, customerName,
@@ -348,12 +398,74 @@ const handleSaleCreation = async (body, connection) => {
     const finalTransactionId = transactionId || `TR-${Date.now()}`;
     const start = Date.now();
 
-    logToFile(`SALE START: ${finalTransactionId} Items=${items.length}`);
+    logToFile(`SALE START: ${finalTransactionId} Items=${items.length} (STRICT MODE)`);
 
     // Verify User
     let finalUserId = user_id || 'admin-seed-id';
 
-    // 1. Insert Header
+    // 1. PRE-VALIDATION & ATOMIC INVENTORY CHECK
+    // We do NOT use bulk updates here because we need row-by-row confirmation of sufficient stock.
+    const itemValues = [];
+
+    // Get all product details first to check expiry
+    const prodIds = items.map(i => i.inventory_id || i.product_id || i.id);
+    const [stockMap] = await connection.query(
+        `SELECT id, name, cost_price, quantity, expiry_date FROM inventory WHERE id IN (?) FOR UPDATE`,
+        [prodIds]
+    );
+
+    const stockLookup = {};
+    stockMap.forEach(r => stockLookup[r.id] = r);
+
+    for (const item of items) {
+        const prodId = item.inventory_id || item.product_id || item.id;
+        const requestedQty = Number(item.quantity) || 0;
+        const product = stockLookup[prodId];
+
+        if (!product) {
+            throw new Error(`Product not found: ${item.name || prodId}`);
+        }
+
+        // CRITICAL CHECK #1: Expiry
+        if (product.expiry_date) {
+            const expDate = new Date(product.expiry_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (expDate < today) {
+                throw new Error(`Cannot sell EXPIRED item: ${product.name} (Exp: ${product.expiry_date.toISOString().split('T')[0]})`);
+            }
+        }
+
+        // CRITICAL CHECK #2: Sufficient Stock
+        if (product.quantity < requestedQty) {
+            throw new Error(`Insufficient stock for ${product.name}. Available: ${product.quantity}, Requested: ${requestedQty}`);
+        }
+
+        // Prepare Sales Item Data
+        const itemId = generateUUID();
+        const price = Number(item.price || item.unit_price) || 0;
+        const itemTotal = Number(item.total) || (requestedQty * price);
+        const cost = Number(product.cost_price) || 0;
+
+        itemValues.push([
+            itemId, saleId, prodId, item.name || item.product_name || product.name,
+            requestedQty, price, itemTotal, item.isWholesale || false, cost
+        ]);
+
+        // CRITICAL UPDATE: Atomic Decrement
+        // We use the "AND quantity >= ?" clause as a final safeguard against race conditions
+        const [res] = await connection.query(
+            `UPDATE inventory SET quantity = quantity - ?, updated_at = NOW() WHERE id = ? AND quantity >= ?`,
+            [requestedQty, prodId, requestedQty]
+        );
+
+        if (res.affectedRows === 0) {
+            // Double check: if we failed here, it means race condition hit between SELECT and UPDATE
+            throw new Error(`Stock mismatch during transaction for ${product.name}. Please retry.`);
+        }
+    }
+
+    // 2. Insert Sale Header
     await connection.query(
         `INSERT INTO sales (
             id, user_id, total, discount, manual_discount, tax_amount, payment_method, 
@@ -367,63 +479,17 @@ const handleSaleCreation = async (body, connection) => {
         ]
     );
 
-    // 2. Batch Process Items (Vectorized)
-    if (items.length > 0) {
-        // A. Prepare Bulk Insert Data
-        const itemValues = [];
-        const updateIds = [];
-        const updateCases = [];
+    // 3. Insert Sales Items
+    await connection.query(
+        `INSERT INTO sales_items (id, sale_id, inventory_id, product_name, quantity, unit_price, total, is_wholesale, cost_price) VALUES ?`,
+        [itemValues]
+    );
 
-        // Pre-fetch costs for all items in one go
-        const prodIds = items.map(i => i.inventory_id || i.product_id || i.id);
-        const [stockMap] = await connection.query(`SELECT id, cost_price, quantity FROM inventory WHERE id IN (?)`, [prodIds]);
-        const costs = {};
-        stockMap.forEach(r => costs[r.id] = Number(r.cost_price) || 0);
-
-        for (const item of items) {
-            const prodId = item.inventory_id || item.product_id || item.id;
-            const itemId = generateUUID();
-            const quantity = Number(item.quantity) || 0;
-            const price = Number(item.price || item.unit_price) || 0;
-            const itemTotal = Number(item.total) || (quantity * price);
-            const cost = costs[prodId] || 0;
-
-            itemValues.push([
-                itemId, saleId, prodId, item.name || item.product_name,
-                quantity, price, itemTotal, item.isWholesale || false, cost
-            ]);
-
-            // Prepare Update Case
-            updateIds.push(prodId);
-            updateCases.push(`WHEN '${prodId}' THEN quantity - ${quantity}`);
-        }
-
-        // B. Execute Bulk Insert (Single Query)
-        await connection.query(
-            `INSERT INTO sales_items (id, sale_id, inventory_id, product_name, quantity, unit_price, total, is_wholesale, cost_price) VALUES ?`,
-            [itemValues]
-        );
-
-        // C. Execute Bulk Update (Single Query)
-        // UPDATE inventory SET quantity = CASE id WHEN ... END, updated_at = NOW() WHERE id IN (...)
-        if (updateIds.length > 0) {
-            const updateSql = `UPDATE inventory SET quantity = CASE id ${updateCases.join(' ')} END, updated_at = NOW() WHERE id IN (?)`;
-            await connection.query(updateSql, [updateIds]);
-        }
-    }
-
-    // 3. Receipt Logic (Optimized)
+    // 4. Receipt Data
     const receiptId = generateUUID();
-    const receiptData = { /* ... minimal receipt data ... */
-        saleId, transactionId: finalTransactionId, date: new Date().toISOString(),
-        items: items, total, customerName, cashierName
-    };
-    // Optimization: saving less redundant data in giant JSON blobs if not needed, but keeping compat for now.
-    // Actually, stick to compat for safety.
-
     await connection.query(
         'INSERT INTO receipts (id, sale_id, receipt_number, receipt_data) VALUES (?, ?, ?, ?)',
-        [receiptId, saleId, finalTransactionId, JSON.stringify(body)] // Saving full body is safer for reprints
+        [receiptId, saleId, finalTransactionId, JSON.stringify(body)]
     );
 
     const duration = Date.now() - start;
@@ -434,7 +500,7 @@ const handleSaleCreation = async (body, connection) => {
 };
 
 // Edge Function Bridge for Sales (Required by offline-client.ts invoke('complete-sale'))
-app.post('/api/functions/complete-sale', async (req, res) => {
+app.post('/api/functions/complete-sale', requireAuth, async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
@@ -442,8 +508,8 @@ app.post('/api/functions/complete-sale', async (req, res) => {
 
         // Audit - simplified for speed
         await logAuditEvent(connection, {
-            userId: req.body.cashierId || req.body.user_id,
-            userEmail: req.body.cashierEmail || 'unknown',
+            userId: req.body.cashierId || req.body.user_id || req.user.id,
+            userEmail: req.body.cashierEmail || req.user.email,
             eventType: 'SALE_CREATED',
             action: `Created sale ${result.transactionId}`,
             resourceType: 'sales',
@@ -463,15 +529,15 @@ app.post('/api/functions/complete-sale', async (req, res) => {
     }
 });
 
-app.post('/api/sales', async (req, res) => {
+app.post('/api/sales', requireAuth, async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
         const result = await handleSaleCreation(req.body, connection);
 
         // Log sale creation to audit
-        const cashierEmail = req.body.cashierEmail || 'unknown';
-        const cashierId = req.body.cashierId || req.body.user_id;
+        const cashierEmail = req.body.cashierEmail || req.user.email;
+        const cashierId = req.body.cashierId || req.user.id;
 
         await logAuditEvent(connection, {
             userId: cashierId,
@@ -498,7 +564,7 @@ app.post('/api/sales', async (req, res) => {
 // DELETED REPEATED CLOUD FUNCTION MOCK
 
 // Cloud Function Mocks
-app.post('/api/functions/create-user', async (req, res) => {
+app.post('/api/functions/create-user', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
@@ -566,7 +632,7 @@ app.post('/api/functions/create-user', async (req, res) => {
     }
 });
 
-app.post('/api/functions/reset-user-password', async (req, res) => {
+app.post('/api/functions/reset-user-password', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
     const connection = await pool.getConnection();
     try {
         const { userId, newPassword } = req.body;
@@ -595,7 +661,7 @@ app.post('/api/functions/reset-user-password', async (req, res) => {
 });
 
 
-app.post('/api/functions/update-user', async (req, res) => {
+app.post('/api/functions/update-user', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
@@ -661,7 +727,7 @@ app.post('/api/functions/update-user', async (req, res) => {
     }
 });
 
-app.post('/api/functions/delete-user', async (req, res) => {
+app.post('/api/functions/delete-user', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
     const connection = await pool.getConnection();
     try {
         await connection.beginTransaction();
@@ -688,12 +754,9 @@ app.post('/api/functions/delete-user', async (req, res) => {
         connection.release();
     }
 });
-app.post('/api/functions/delete-user', async (req, res) => {
-    // ... (existing code)
-});
 
 // --- CUSTOM HANDLER FOR RECEITPS (Fixes 500 Error on filtering) ---
-app.get('/api/receipts', async (req, res) => {
+app.get('/api/receipts', requireAuth, async (req, res) => {
     try {
         const cashierParams = Object.keys(req.query).find(k => k.startsWith('sales.cashier_id'));
         let query = 'SELECT r.* FROM receipts r';
@@ -728,7 +791,7 @@ app.get('/api/receipts', async (req, res) => {
     }
 });
 
-app.post('/api/functions/list-users', async (req, res) => {
+app.post('/api/functions/list-users', requireAuth, async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT id, email, role, first_name, last_name FROM users');
         const users = rows.map(u => ({
@@ -741,7 +804,7 @@ app.post('/api/functions/list-users', async (req, res) => {
     }
 });
 
-app.post('/api/rpc/:func', async (req, res) => {
+app.post('/api/rpc/:func', requireAuth, async (req, res) => {
     const { func } = req.params;
     console.log(`[Server] RPC Call: ${func}`);
 
@@ -789,24 +852,41 @@ app.post('/api/rpc/:func', async (req, res) => {
 
 // --- GENERIC DATA HANDLERS ---
 
-app.get('/api/:table', async (req, res) => {
+app.get('/api/:table', requireAuth, async (req, res) => {
     try {
         const { table } = req.params;
-        if (!/^[a-z0-9_]+$/i.test(table)) return res.status(400).json({ error: 'Invalid table' });
+        const userRole = (req.user?.role || 'DISPENSER').toUpperCase();
+
+        if (!ALLOWED_TABLES.includes(table)) {
+            return res.status(400).json({ error: 'Invalid or restricted table' });
+        }
+
+
+        // RBAC: Restricted tables
+        const adminOnlyTables = ['users', 'store_settings', 'user_roles', 'audit_logs', 'system_logs', 'database_backups'];
+        if (adminOnlyTables.includes(table) && userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to READ restricted table: ${table}`);
+            return res.status(403).json({ error: 'Forbidden', message: `Only admins can view ${table}` });
+        }
 
         let targetTable = table;
-        // The profiles/user_roles remapping is no longer needed as we now have the tables
-        // but we'll keep it as a fallback if the tables don't exist yet
-
         let sql = `SELECT * FROM ${targetTable}`;
         let params = [];
-        const reservedParams = ['order', 'limit', 'select', 'offset'];
+
+        // Expiry Filtering for Inventory
+        const showExpired = req.query.include_expired === 'true';
+        if (table === 'inventory' && !showExpired) {
+            sql += ' WHERE (expiry_date > CURDATE() OR expiry_date IS NULL)';
+        }
+
+        const reservedParams = ['order', 'limit', 'select', 'offset', 'include_expired'];
         const filters = Object.entries(req.query)
             .filter(([k, v]) => !reservedParams.includes(k) && String(v).includes('.'));
 
         if (filters.length > 0) {
-            sql += ' WHERE ' + filters.map(([k, v]) => {
-                let col = (targetTable === 'users' && k === 'user_id' ? 'id' : k);
+            sql += (sql.includes('WHERE') ? ' AND ' : ' WHERE ') + filters.map(([k, v]) => {
+                const safeCol = k.replace(/[^a-z0-9_]/gi, '');
+                let col = (targetTable === 'users' && safeCol === 'user_id' ? 'id' : safeCol);
                 const parts = String(v).split('.');
                 const op = parts[0];
                 let val = parts.slice(1).join('.');
@@ -840,8 +920,10 @@ app.get('/api/:table', async (req, res) => {
 
         // --- Handle Order & Limit ---
         if (req.query.order) {
-            const [col, dir] = req.query.order.split('.');
-            sql += ` ORDER BY ${col} ${dir === 'desc' ? 'DESC' : 'ASC'}`;
+            const [orderCol, dir] = req.query.order.split('.');
+            // Clean column name (prevent SQL injection)
+            const safeOrderCol = orderCol.replace(/[^a-z0-9_]/gi, '');
+            sql += ` ORDER BY ${safeOrderCol} ${dir === 'desc' ? 'DESC' : 'ASC'}`;
         } else if (table === 'inventory') {
             sql += ` ORDER BY name ASC`;
         }
@@ -858,6 +940,10 @@ app.get('/api/:table', async (req, res) => {
                 ...r,
                 price: Number(r.unit_price) || 0,
                 unit_price: Number(r.unit_price) || 0,
+                wholesalePrice: Number(r.wholesale_price) || 0,
+                wholesale_price: Number(r.wholesale_price) || 0,
+                minWholesaleQuantity: r.min_wholesale_quantity || 5,
+                min_wholesale_quantity: r.min_wholesale_quantity || 5,
                 reorderLevel: r.low_stock_threshold || 10,
                 reorder_level: r.low_stock_threshold || 10,
                 batch_number: r.batch_number,
@@ -891,11 +977,12 @@ app.get('/api/:table', async (req, res) => {
         }
 
         if (table === 'profiles') {
-            return res.json(rows.map(r => ({
+            const profileRows = rows.map(r => ({
                 ...r,
                 name: r.name || 'User',
                 username: r.username || 'user'
-            })));
+            }));
+            return res.json(profileRows);
         }
         if (table === 'user_roles') {
             return res.json(rows.map(r => normalizeRole(r)));
@@ -909,9 +996,28 @@ app.get('/api/:table', async (req, res) => {
     }
 });
 
-app.post('/api/:table', async (req, res) => {
+app.post('/api/:table', requireAuth, async (req, res) => {
     try {
         const { table } = req.params;
+        const userRole = req.user.role.toUpperCase();
+
+        // Strict Table Whitelist
+        const allowedTables = [
+            'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
+            'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
+            'audit_logs', 'system_logs', 'store_settings', 'payment_records'
+        ];
+
+        if (!allowedTables.includes(table)) {
+            return res.status(400).json({ error: 'Invalid or restricted table' });
+        }
+
+        // RBAC: Restricted tables
+        const adminOnlyTables = ['users', 'store_settings', 'user_roles', 'audit_logs', 'system_configs'];
+        if (adminOnlyTables.includes(table) && userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to CREATE in restricted table: ${table}`);
+            return res.status(403).json({ error: 'Forbidden', message: `Only admins can create ${table}` });
+        }
 
         // --- SAFE DATA EXTRACTION ---
         let body = req.body;
@@ -939,10 +1045,30 @@ app.post('/api/:table', async (req, res) => {
             // --- Robust Mapping for Legacy/Variant Columns ---
             const mapKeys = {
                 'price': 'unit_price',
+                'wholesalePrice': 'wholesale_price',
+                'minWholesaleQuantity': 'min_wholesale_quantity',
                 'reorderLevel': 'low_stock_threshold',
                 'reorder_level': 'low_stock_threshold',
                 'batchNumber': 'batch_number',
                 'expiryDate': 'expiry_date'
+            };
+
+            for (const [key, dbCol] of Object.entries(mapKeys)) {
+                if (data[key] !== undefined) {
+                    data[dbCol] = data[key];
+                    if (key !== dbCol) delete data[key];
+                }
+            }
+        }
+
+        if (table === 'profiles' || table === 'users') {
+            const mapKeys = {
+                'userId': 'user_id',
+                'userName': 'name',
+                'userEmail': 'email',
+                'fullName': 'full_name',
+                'phoneNumber': 'phone_number',
+                'businessName': 'business_name'
             };
 
             for (const [key, dbCol] of Object.entries(mapKeys)) {
@@ -1027,17 +1153,42 @@ app.post('/api/:table', async (req, res) => {
     }
 });
 
-app.patch('/api/:table', async (req, res) => {
+app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
     logToFile(`[Server] Entering PATCH /api/${req.params.table}`);
+    const connection = await pool.getConnection();
     try {
-        const { table } = req.params;
+        const { table, id: paramId } = req.params;
+        const userRole = req.user.role.toUpperCase();
+
+        // RBAC: Restricted tables
+        const adminOnlyTables = ['users', 'store_settings', 'user_roles', 'audit_logs'];
+        if (adminOnlyTables.includes(table) && userRole !== 'SUPER_ADMIN' && userRole !== 'ADMIN') {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to MODIFY restricted table: ${table}`);
+            return res.status(403).json({ error: 'Forbidden', message: `Only admins can modify ${table}` });
+        }
+
+        if (!ALLOWED_TABLES.includes(table)) {
+            return res.status(400).json({ error: 'Invalid or restricted table' });
+        }
+
         let data = { ...req.body };
-        const targetId = (req.query.id ? req.query.id.replace('eq.', '') : data.id);
+        const targetId = paramId || (req.query.id ? req.query.id.replace('eq.', '') : data.id);
+
+        if (!targetId) return res.status(400).json({ error: 'Missing ID for patch' });
+
+        // UUID Format Validation to prevent DB crashes
+        if (targetId && !isValidUUID(targetId) && !['store_settings', 'system_configs'].includes(table)) {
+            logToFile(`[Server] PATCH /api/${table} - Invalid UUID: ${targetId}`);
+            return res.status(400).json({ error: 'Invalid ID format' });
+        }
+
 
         if (table === 'inventory') {
             // --- Robust Mapping for Legacy/Variant Columns ---
             const mapKeys = {
                 'price': 'unit_price',
+                'wholesalePrice': 'wholesale_price',
+                'minWholesaleQuantity': 'min_wholesale_quantity',
                 'reorderLevel': 'low_stock_threshold',
                 'reorder_level': 'low_stock_threshold',
                 'batchNumber': 'batch_number',
@@ -1052,7 +1203,12 @@ app.patch('/api/:table', async (req, res) => {
             }
         }
 
-        const updates = Object.keys(data).filter(k => k !== 'id').map(k => `${k} = ?`).join(', ');
+        const updates = Object.keys(data)
+            .filter(k => k !== 'id')
+            .map(k => {
+                const safeKey = k.replace(/[^a-z0-9_]/gi, '');
+                return `${safeKey} = ?`;
+            }).join(', ');
         const params = Object.keys(data)
             .filter(k => k !== 'id')
             .map(k => {
@@ -1062,51 +1218,49 @@ app.patch('/api/:table', async (req, res) => {
                     val = formatForMySQL(val);
                 }
                 return (val && typeof val === 'object') ? JSON.stringify(val) : val;
+
             });
 
         params.push(targetId);
 
+        await connection.beginTransaction();
+
         logToFile(`[Server] PATCH /api/${table} id=${targetId} STEP 1: Executing Update...`);
-        const [updateResult] = await pool.query(`UPDATE ${table} SET ${updates} WHERE id = ?`, params);
-        logToFile(`[Server] PATCH /api/${table} id=${targetId} STEP 2: Update Result: ${JSON.stringify(updateResult)}`);
+        const [updateResult] = await connection.query(`UPDATE ${table} SET ${updates} WHERE id = ?`, params);
 
-        // --- SPECIAL LOGIC: Handle Refund Approval (Restore Inventory) ---
+        // --- SPECIAL LOGIC: Handle Refund Approval (Restore Inventory ATOMICALLY) ---
         if (table === 'refunds' && data.status === 'approved') {
-            try {
-                console.log(`[Server] Detected Approved Refund ${targetId}. Restoring inventory...`);
-                logToFile(`[Server] Restoring inventory for refund ${targetId}`);
+            console.log(`[Server] Detected Approved Refund ${targetId}. Restoring inventory...`);
+            logToFile(`[Server] Restoring inventory for refund ${targetId}`);
 
-                const [refunds] = await pool.query('SELECT items, sale_id FROM refunds WHERE id = ?', [targetId]);
-                if (refunds.length > 0 && refunds[0].items) {
-                    const itemsData = refunds[0].items;
-                    const items = typeof itemsData === 'string' ? JSON.parse(itemsData) : itemsData;
+            const [refundRows] = await connection.query('SELECT items, sale_id FROM refunds WHERE id = ? FOR UPDATE', [targetId]);
+            if (refundRows.length > 0 && refundRows[0].items) {
+                const itemsList = typeof refundRows[0].items === 'string' ? JSON.parse(refundRows[0].items) : refundRows[0].items;
 
-                    if (Array.isArray(items)) {
-                        for (const item of items) {
-                            const prodId = item.inventory_id || item.product_id || item.id;
-                            const qty = parseInt(item.quantity) || 0;
+                if (Array.isArray(itemsList)) {
+                    for (const item of itemsList) {
+                        const prodId = item.inventory_id || item.product_id || item.id;
+                        const qty = parseInt(item.quantity) || 0;
 
-                            if (prodId && qty > 0) {
-                                await pool.query(
-                                    'UPDATE inventory SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                                    [qty, prodId]
-                                );
-                                console.log(`[Server]   - Restored ${qty} to Inventory ID ${prodId}`);
-                                logToFile(`[Server] Restored ${qty} to inventory ${prodId}`);
-                            }
+                        if (prodId && qty > 0) {
+                            await connection.query(
+                                'UPDATE inventory SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                                [qty, prodId]
+                            );
+                            console.log(`[Server]   - Restored ${qty} to Inventory ID ${prodId}`);
+                            logToFile(`[Server] Restored ${qty} to inventory ${prodId}`);
                         }
                     }
                 }
-                logToFile(`[Server] Inventory restoration completed for refund ${targetId}`);
-            } catch (restoreErr) {
-                console.error(`[Server] Inventory restoration failed for refund ${targetId}:`, restoreErr);
-                logToFile(`[Server] Inventory restoration CRITICAL ERROR: ${restoreErr.message}`);
             }
         }
 
-        // Audit logging for transaction-related updates
+        await connection.commit();
+        logToFile(`[Server] PATCH /api/${table} SUCCESS: ${targetId}`);
+
+        // Audit logging (post-commit)
         if (['inventory', 'refunds'].includes(table)) {
-            const connection = await pool.getConnection();
+            const auditConn = await pool.getConnection();
             try {
                 let eventType, action;
                 if (table === 'refunds' && data.status === 'approved') {
@@ -1121,15 +1275,10 @@ app.patch('/api/:table', async (req, res) => {
                 }
 
                 if (eventType) {
-                    // Identity Priority: explicit data > middleware > system
-                    const finalUserId = data.user_id || (req.user ? req.user.id : 'system');
-                    const finalEmail = (req.user && !data.user_id) ? req.user.email : null;
-                    const finalRole = (req.user && !data.user_id) ? req.user.role : null;
-
-                    await logAuditEvent(connection, {
-                        userId: finalUserId,
-                        userEmail: finalEmail,
-                        userRole: finalRole,
+                    await logAuditEvent(auditConn, {
+                        userId: req.user.id,
+                        userEmail: req.user.email,
+                        userRole: req.user.role,
                         eventType,
                         action,
                         resourceType: table,
@@ -1139,24 +1288,38 @@ app.patch('/api/:table', async (req, res) => {
                     });
                 }
             } finally {
-                connection.release();
+                auditConn.release();
             }
         }
 
         res.json({ success: true });
     } catch (err) {
+        if (connection) await connection.rollback();
         const errMsg = `[Server] PATCH /api/${req.params.table} FAILED: ${err.message}`;
         console.error(errMsg, err);
         logToFile(errMsg);
-        if (err.stack) logToFile(`STACK: ${err.stack}`);
         res.status(500).json({ error: 'Update failed', message: err.message });
+    } finally {
+        connection.release();
     }
 });
 
-app.delete('/api/:table', async (req, res) => {
+app.delete('/api/:table', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
     logToFile(`[Server] Entering DELETE /api/${req.params.table}`);
     try {
         const { table } = req.params;
+
+        // Strict Table Whitelist
+        const allowedTables = [
+            'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
+            'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
+            'audit_logs', 'system_logs', 'store_settings', 'payment_records'
+        ];
+
+        if (!allowedTables.includes(table)) {
+            return res.status(400).json({ error: 'Invalid or restricted table' });
+        }
+
         const query = req.query;
         let sql = `DELETE FROM ${table} WHERE `;
         let params = [];

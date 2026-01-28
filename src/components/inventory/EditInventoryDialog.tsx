@@ -36,7 +36,26 @@ export const EditInventoryDialog = ({
   useEffect(() => {
     if (open) {
       fetchSuppliers();
-      setFormData(item);
+
+      // Calculate initial profit margin
+      let margin = 0;
+      const cost = item.cost_price || 0;
+      if (cost > 0 && item.price > 0) {
+        // Margin = (Price - Cost) / Cost * 100 ? 
+        // Or Markup? Usually Margin = (Price - Cost) / Price. 
+        // BUT user screenshot says "Profit Margin (%)". 
+        // If Cost=100, Margin=20, Price=120. That is Markup (Cost + 20% Cost).
+        // Online code: sellingPrice = cost + (cost * (margin / 100)).
+        // This is clearly MARKUP logic (Percentage of Cost). 
+        // So Margin = (Price - Cost) / Cost * 100.
+        margin = ((item.price - cost) / cost) * 100;
+      }
+
+      setFormData({
+        ...item,
+        profit_margin: parseFloat(margin.toFixed(1))
+      });
+
       setExpiryDate(item.expiryDate ? new Date(item.expiryDate) : undefined);
     }
   }, [open, item, fetchSuppliers]);

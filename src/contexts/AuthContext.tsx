@@ -143,10 +143,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Automatic logout on window close/tab close (for shared workstations)
     const handleBeforeUnload = () => {
-      // Clear session storage on window close
-      if (import.meta.env.VITE_APP_MODE !== 'offline') {
-        sessionStorage.clear();
-      }
+      // Clear session storage on window close to ensure clean state next launch
+      sessionStorage.clear();
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);

@@ -56,7 +56,14 @@ export const ReceiptPreview = ({ open, onOpenChange, receiptData, onPrint }: Rec
           <DialogTitle>Receipt Preview</DialogTitle>
         </DialogHeader>
 
-        <div className="border rounded-md p-4 bg-background font-mono text-xs">
+        <div className="border rounded-md p-4 bg-background font-mono text-xs relative overflow-hidden">
+          {/* Watermark for Security */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+            <div className="text-4xl font-bold text-foreground/5 -rotate-45 uppercase whitespace-nowrap">
+              PharmCare Pro - Official Receipt
+            </div>
+          </div>
+
           {/* Header */}
           <div className="text-center mb-4">
             {storeSettings.print_show_logo && logo && (

@@ -2,9 +2,10 @@
 // Redirects calls to local Express API
 
 const API_URL = `${window.location.origin}/api`;
-const APP_MODE = import.meta.env.VITE_APP_MODE;
+// STRICT OFFLINE MODE ENFORCED
+const APP_MODE = 'offline';
 
-console.log(`[DB Client] Initialized. Mode: ${APP_MODE}. API Root: ${API_URL}`);
+console.log(`[DB Client] Initialized. Strict Offline Mode. API Root: ${API_URL}`);
 
 // --- ROBUST UUID GENERATOR ---
 const generateUUID = () => {
@@ -142,7 +143,7 @@ class QueryBuilder {
     async then(resolve: (value: any) => void) {
         try {
             let endpoint = `${API_URL}/${this.table}`;
-            const token = localStorage.getItem('offline_token') || '';
+            const token = sessionStorage.getItem('offline_token') || '';
             let options: RequestInit = {
                 headers: {
                     'Content-Type': 'application/json',
@@ -233,27 +234,27 @@ export const db = {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Invalid username or password');
 
-                localStorage.setItem('offline_token', data.access_token);
-                localStorage.setItem('offline_user', JSON.stringify(data.user));
+                sessionStorage.setItem('offline_token', data.access_token);
+                sessionStorage.setItem('offline_user', JSON.stringify(data.user));
                 return { data: { user: data.user, session: { access_token: data.access_token } }, error: null };
             } catch (error: any) {
                 return { data: { user: null }, error: { message: error.message } };
             }
         },
         signOut: async () => {
-            localStorage.removeItem('offline_token');
-            localStorage.removeItem('offline_user');
+            sessionStorage.removeItem('offline_token');
+            sessionStorage.removeItem('offline_user');
             return { error: null };
         },
         getSession: async () => {
-            const token = localStorage.getItem('offline_token');
-            const userJson = localStorage.getItem('offline_user');
+            const token = sessionStorage.getItem('offline_token');
+            const userJson = sessionStorage.getItem('offline_user');
             if (!token) return { data: { session: null }, error: null };
             const user = userJson ? JSON.parse(userJson) : null;
             return { data: { session: { access_token: token, user } }, error: null };
         },
         getUser: async () => {
-            const userJson = localStorage.getItem('offline_user');
+            const userJson = sessionStorage.getItem('offline_user');
             if (!userJson) return { data: { user: null }, error: null };
             return { data: { user: JSON.parse(userJson) }, error: null };
         },
@@ -298,7 +299,7 @@ export const db = {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('offline_token') || ''}`
+                        'Authorization': `Bearer ${sessionStorage.getItem('offline_token') || ''}`
                     },
                     body: JSON.stringify(options.body)
                 });
@@ -320,7 +321,7 @@ export const db = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('offline_token') || ''}`
+                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token') || ''}`
                 },
                 body: JSON.stringify(args)
             });
