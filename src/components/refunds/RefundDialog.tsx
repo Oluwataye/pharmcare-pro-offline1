@@ -48,43 +48,76 @@ export const RefundDialog = ({
     const [reason, setReason] = useState('');
     const [hasExistingRefund, setHasExistingRefund] = useState(false);
     const [isCheckingRefund, setIsCheckingRefund] = useState(true);
+    const [isFetchingItems, setIsFetchingItems] = useState(false);
+    const [resolvedUUID, setResolvedUUID] = useState<string>(saleId);
 
     useEffect(() => {
         if (open) {
-            // Check if refund already exists
-            checkRefundExists(saleId).then((exists) => {
-                setHasExistingRefund(exists);
-                setIsCheckingRefund(false);
-            });
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(saleId);
 
-            // Initialize items for selection
-            // Note: sales_items from DB usually have: inventory_id, product_name, quantity, unit_price
-            if (items && items.length > 0) {
-                const mappedItems = items.map(item => {
-                    // Extract unit price robustly
-                    const price = parseFloat(item.unit_price || item.price || 0);
-                    // Extract product name robustly
-                    const name = item.product_name || item.name || 'Unknown Item';
-                    // Extract inventory/product ID robustly
-                    const id = item.inventory_id || item.product_id || item.id;
+            const initializeData = async () => {
+                setIsCheckingRefund(true);
+                let currentId = saleId;
+                let currentItems = items;
 
-                    return {
-                        inventory_id: id,
-                        product_name: name,
-                        quantity: 1, // Default to 1 for the selector
-                        maxQuantity: parseInt(item.quantity) || 1,
-                        unit_price: price,
-                        selected: false
-                    };
+                // 1. Resolve UUID if it's a Transaction ID
+                if (!isUUID || (items && items.length === 0)) {
+                    setIsFetchingItems(true);
+                    try {
+                        const { data: sale, error } = await supabase
+                            .from('sales')
+                            .select('id, sales_items(*)')
+                            .or(`id.eq.${isUUID ? saleId : '00000000-0000-0000-0000-000000000000'},transaction_id.eq.${saleId}`)
+                            .maybeSingle();
+
+                        if (sale) {
+                            currentId = sale.id;
+                            setResolvedUUID(sale.id);
+                            if (!items || items.length === 0) {
+                                currentItems = sale.sales_items || [];
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error resolving sale:', err);
+                    } finally {
+                        setIsFetchingItems(false);
+                    }
+                }
+
+                // 2. Check if refund already exists
+                checkRefundExists(currentId).then((exists) => {
+                    setHasExistingRefund(exists);
+                    setIsCheckingRefund(false);
                 });
-                setRefundItems(mappedItems);
-            }
+
+                // 3. Initialize items for selection
+                if (currentItems && currentItems.length > 0) {
+                    const mappedItems = currentItems.map(item => {
+                        const price = parseFloat(item.unit_price || item.price || 0);
+                        const name = item.product_name || item.name || 'Unknown Item';
+                        const id = item.inventory_id || item.product_id || item.id;
+
+                        return {
+                            inventory_id: id,
+                            product_name: name,
+                            quantity: 1,
+                            maxQuantity: parseInt(item.quantity) || 1,
+                            unit_price: price,
+                            selected: false
+                        };
+                    });
+                    setRefundItems(mappedItems);
+                }
+            };
+
+            initializeData();
         } else {
             // Reset form when dialog closes
             setReason('');
             setHasExistingRefund(false);
             setIsCheckingRefund(true);
             setRefundItems([]);
+            setResolvedUUID(saleId);
         }
     }, [open, saleId, items]);
 
@@ -148,7 +181,7 @@ export const RefundDialog = ({
         const refundType = totalRefundAmount >= originalAmount ? 'full' : 'partial';
 
         const request: RefundRequest = {
-            sale_id: saleId,
+            sale_id: resolvedUUID,
             transaction_id: transactionId,
             refund_amount: totalRefundAmount,
             refund_reason: reason.trim(),
@@ -180,9 +213,10 @@ export const RefundDialog = ({
                     </DialogDescription>
                 </DialogHeader>
 
-                {isCheckingRefund ? (
-                    <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                {(isCheckingRefund || isFetchingItems) ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">Loading transaction details...</p>
                     </div>
                 ) : hasExistingRefund ? (
                     <Alert variant="destructive">
