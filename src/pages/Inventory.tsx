@@ -16,9 +16,13 @@ import { InventoryToolbar } from "@/components/inventory/InventoryToolbar";
 import { AddInventoryDialog } from "@/components/inventory/AddInventoryDialog";
 import { BulkUploadDialog } from "@/components/inventory/BulkUploadDialog";
 import { useInventory } from "@/hooks/useInventory";
+import { useSuppliers } from "@/hooks/useSuppliers";
 import { Spinner } from "@/components/ui/spinner";
 import { ExpiryWarningBanner } from "@/components/inventory/ExpiryWarningBanner";
 import { ExpiryNotificationBanner } from "@/components/notifications/ExpiryNotificationBanner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StockMovementHistory } from "@/components/inventory/StockMovementHistory";
+import { History, Package } from "lucide-react";
 
 const Inventory = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -40,6 +44,7 @@ const Inventory = () => {
     handlePrint,
     adjustStock
   } = useInventory();
+  const { suppliers } = useSuppliers();
   const location = useLocation();
 
   // Get all categories for filtering
@@ -116,38 +121,68 @@ const Inventory = () => {
 
       <InventoryStats inventory={inventory} />
 
-      <EnhancedCard className="z-10" colorScheme="primary">
-        <CardHeader className="p-4 md:p-6">
-          <CardTitle>Inventory List</CardTitle>
-          <CardDescription>
-            View and manage all products in your inventory
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6">
-          <InventoryToolbar
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            categoryFilter={categoryFilter}
-            categories={categories}
-            onCategoryChange={handleCategoryChange}
-            supplierFilter={supplierFilter}
-            onSupplierChange={setSupplierFilter}
-            onRefresh={handleRefreshWithLoading}
-            onAddItem={() => setDialogOpen(true)}
-            onPrint={handlePrint}
-            onBulkUpload={() => setBulkUploadOpen(true)}
-          />
-          <div className="responsive-table">
-            <InventoryTable
-              inventory={filteredInventory}
-              onDeleteItem={deleteItem}
-              onUpdateItem={updateItem}
-              onBatchDelete={batchDelete}
-              onAdjustStock={adjustStock}
-            />
-          </div>
-        </CardContent>
-      </EnhancedCard>
+      <Tabs defaultValue="list" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="list" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Inventory List
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Stock History
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="space-y-4">
+          <EnhancedCard className="z-10" colorScheme="primary">
+            <CardHeader className="p-4 md:p-6">
+              <CardTitle>Inventory List</CardTitle>
+              <CardDescription>
+                View and manage all products in your inventory
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 md:p-6">
+              <InventoryToolbar
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                categoryFilter={categoryFilter}
+                categories={categories}
+                onCategoryChange={handleCategoryChange}
+                supplierFilter={supplierFilter}
+                onSupplierChange={setSupplierFilter}
+                onRefresh={handleRefreshWithLoading}
+                onAddItem={() => setDialogOpen(true)}
+                onPrint={handlePrint}
+                onBulkUpload={() => setBulkUploadOpen(true)}
+              />
+              <div className="responsive-table">
+                <InventoryTable
+                  inventory={filteredInventory}
+                  onDeleteItem={deleteItem}
+                  onUpdateItem={updateItem}
+                  onBatchDelete={batchDelete}
+                  onAdjustStock={adjustStock}
+                  suppliers={suppliers}
+                />
+              </div>
+            </CardContent>
+          </EnhancedCard>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <EnhancedCard colorScheme="primary">
+            <CardHeader>
+              <CardTitle>Global Stock Movement History</CardTitle>
+              <CardDescription>
+                Audit log of all additions, adjustments, and sales
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <StockMovementHistory limit={100} />
+            </CardContent>
+          </EnhancedCard>
+        </TabsContent>
+      </Tabs>
 
       <AddInventoryDialog
         open={dialogOpen}

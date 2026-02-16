@@ -18,6 +18,9 @@ import {
   ChevronLeft,
   Receipt,
   Printer,
+  Clock,
+  CheckCircle2,
+  Wallet,
 } from "lucide-react";
 import { NairaSign } from "../icons/NairaSign";
 
@@ -33,6 +36,7 @@ const Sidebar = ({ onClose }: SidebarProps) => {
     canAccessInventory,
     canAccessUsers,
     canAccessReports,
+    canAccessExpenses,
   } = usePermissions();
   const { settings: storeSettings } = useStoreSettings();
   const [storeLogo, setStoreLogo] = useState<string>('');
@@ -66,6 +70,18 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       condition: true
     },
     {
+      icon: Clock,
+      label: "Shift Management",
+      path: "/shifts",
+      condition: true
+    },
+    {
+      icon: CheckCircle2,
+      label: "Reconciliation",
+      path: "/reconciliation",
+      condition: canAccessReports()
+    },
+    {
       icon: Receipt,
       label: "Receipts",
       path: "/receipts",
@@ -88,6 +104,12 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       label: "Suppliers",
       path: "/suppliers",
       condition: canAccessInventory()
+    },
+    {
+      icon: Wallet,
+      label: "Expenses",
+      path: "/expenses",
+      condition: canAccessExpenses()
     },
     {
       icon: Users,

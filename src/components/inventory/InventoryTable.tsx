@@ -34,6 +34,7 @@ interface InventoryTableProps {
   onUpdateItem: (id: string, updatedItem: InventoryItem) => void;
   onBatchDelete?: (ids: string[]) => void;
   onAdjustStock?: (id: string, newQuantity: number, reason: string) => void;
+  suppliers?: any[];
 }
 
 export const InventoryTable = ({
@@ -41,7 +42,8 @@ export const InventoryTable = ({
   onDeleteItem,
   onUpdateItem,
   onBatchDelete,
-  onAdjustStock
+  onAdjustStock,
+  suppliers = []
 }: InventoryTableProps) => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [adjustingItem, setAdjustingItem] = useState<InventoryItem | null>(null);

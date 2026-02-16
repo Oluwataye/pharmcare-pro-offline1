@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useSales } from "@/hooks/useSales";
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Printer, Save, ShoppingBag, Package, Shield } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useStoreSettings } from "@/hooks/useStoreSettings";
+import { cn } from "@/lib/utils";
 import ProductSearchSection from "@/components/sales/ProductSearchSection";
 import CurrentSaleTable from "@/components/sales/CurrentSaleTable";
 import SaleTotals from "@/components/sales/SaleTotals";
@@ -20,6 +21,10 @@ import { useOffline } from "@/contexts/OfflineContext";
 import { customerInfoSchema, validateAndSanitize } from "@/lib/validation";
 import { logSecurityEvent } from "@/components/security/SecurityProvider";
 import { ReceiptPreview } from "@/components/receipts/ReceiptPreview";
+import { useShift } from "@/hooks/useShift";
+import PaymentModeSelector, { PaymentMode } from "@/components/sales/PaymentModeSelector";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const NewSale = () => {
   const navigate = useNavigate();
@@ -27,6 +32,7 @@ const NewSale = () => {
   const { user } = useAuth();
   const { isOnline } = useOffline();
   const { canCreateWholesale } = usePermissions();
+  const { activeShift, isLoading: isLoadingShift } = useShift();
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -67,6 +73,17 @@ const NewSale = () => {
     cashierEmail: user ? user.email : undefined,
     cashierId: user ? user.id : undefined
   });
+
+  const [payments, setPayments] = useState<PaymentMode[]>([
+    { mode: 'cash', amount: calculateTotal() }
+  ]);
+
+  // Update payment amount when total changes (if only one payment mode)
+  useEffect(() => {
+    if (payments.length === 1) {
+      setPayments([{ ...payments[0], amount: calculateTotal() }]);
+    }
+  }, [items, discount, manualDiscount]);
 
   const { settings } = useStoreSettings();
   const manualDiscountEnabled = settings?.discount_config?.manualAmountEnabled || false;
@@ -159,6 +176,26 @@ const NewSale = () => {
       return;
     }
 
+    if (!activeShift) {
+      toast({
+        title: "Shift Required",
+        description: "You must start a shift before you can record sales.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Verify payment amount matches total
+    const totalPayment = payments.reduce((sum, p) => sum + p.amount, 0);
+    if (Math.abs(totalPayment - calculateTotal()) > 0.01) {
+      toast({
+        title: "Payment Mismatch",
+        description: "Payment amount does not match the total sale amount.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsCompleting(true);
 
@@ -187,6 +224,7 @@ const NewSale = () => {
         businessAddress: saleType === 'wholesale' ? businessAddress : undefined,
         saleType,
         transactionId,
+        payments
       });
 
       if (result && result.success) {
@@ -250,7 +288,11 @@ const NewSale = () => {
           <Button variant="outline" onClick={() => navigate("/sales")}>
             Cancel
           </Button>
-          <Button onClick={handleCompleteSale} disabled={isCompleting}>
+          <Button
+            onClick={handleCompleteSale}
+            disabled={isCompleting || !activeShift}
+            className={!activeShift ? "opacity-50 grayscale" : ""}
+          >
             {isCompleting ? "Processing..." : (isOfflineMode ? (
               <>
                 <Save className="mr-2 h-4 w-4" />
@@ -265,6 +307,16 @@ const NewSale = () => {
           </Button>
         </div>
       </div>
+
+      {!isLoadingShift && !activeShift && (
+        <Alert variant="destructive" className="bg-destructive/10 border-destructive/20 animate-pulse">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Active Shift Required</AlertTitle>
+          <AlertDescription>
+            No active shift found for your account. Please <Button variant="link" className="p-0 h-auto font-bold text-destructive hover:underline" onClick={() => navigate('/shifts')}>start a shift</Button> to begin selling.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {canCreateWholesale && (
         <Tabs
@@ -409,15 +461,26 @@ const NewSale = () => {
                   manualDiscountEnabled={manualDiscountEnabled}
                 />
 
+                <div className="mt-4 pt-4 border-t">
+                  <PaymentModeSelector
+                    total={calculateTotal()}
+                    payments={payments}
+                    onPaymentsChange={setPayments}
+                  />
+                </div>
+
                 <div className="mt-4 flex flex-col gap-2">
                   <Button
                     onClick={handleCompleteSale}
-                    disabled={isCompleting}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    disabled={isCompleting || !activeShift}
+                    className={cn(
+                      "w-full text-white font-bold h-12 text-lg",
+                      activeShift ? "bg-green-600 hover:bg-green-700" : "bg-muted text-muted-foreground grayscale cursor-not-allowed"
+                    )}
                   >
                     {isCompleting ? "Processing..." : (
                       <>
-                        <Save className="mr-2 h-4 w-4" />
+                        <Save className="mr-2 h-5 w-5" />
                         COMPLETE SALE
                       </>
                     )}

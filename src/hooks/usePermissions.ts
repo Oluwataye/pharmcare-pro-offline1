@@ -70,6 +70,10 @@ export function usePermissions() {
     return hasPermission({ action: 'read', resource: 'reports' });
   };
 
+  const canAccessExpenses = (): boolean => {
+    return hasPermission({ action: 'read', resource: 'expenses' });
+  };
+
   const canCreateWholesale = (): boolean => {
     // All users can create wholesale transactions
     return true;
@@ -85,8 +89,11 @@ export function usePermissions() {
     return true;
   };
 
+  const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+
   return {
     hasPermission,
+    isAdmin,
     canAccessInventory,
     canManageInventory,
     canAccessSales,
@@ -97,6 +104,7 @@ export function usePermissions() {
     canDeleteUsers,
     canResetPassword,
     canAccessReports,
+    canAccessExpenses,
     canCreateWholesale,
     canReadWholesale,
     canManageWholesale,

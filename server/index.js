@@ -68,7 +68,7 @@ const ALLOWED_TABLES = [
     'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
     'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
     'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements',
-    'system_configs', 'database_backups', 'stock_movements'
+    'system_configs', 'database_backups', 'shifts', 'cash_reconciliations', 'expenses'
 ];
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -418,7 +418,7 @@ const handleSaleCreation = async (body, connection) => {
     stockMap.forEach(r => stockLookup[r.id] = r);
 
     for (const item of items) {
-        const prodId = item.inventory_id || item.product_id || item.id;
+        const prodId = item.inventory_id || item.product_id || item.id || item.inventoryId;
         const requestedQty = Number(item.quantity) || 0;
         const product = stockLookup[prodId];
 
@@ -453,19 +453,33 @@ const handleSaleCreation = async (body, connection) => {
         ]);
 
         // CRITICAL UPDATE: Atomic Decrement
-        // We use the "AND quantity >= ?" clause as a final safeguard against race conditions
         const [res] = await connection.query(
             `UPDATE inventory SET quantity = quantity - ?, updated_at = NOW() WHERE id = ? AND quantity >= ?`,
             [requestedQty, prodId, requestedQty]
         );
 
         if (res.affectedRows === 0) {
-            // Double check: if we failed here, it means race condition hit between SELECT and UPDATE
             throw new Error(`Stock mismatch during transaction for ${product.name}. Please retry.`);
         }
+
+        // RECORD STOCK MOVEMENT
+        await connection.query(
+            `INSERT INTO stock_movements (
+                id, product_id, quantity_change, previous_quantity, new_quantity, 
+                type, reason, reference_id, created_by, cost_price_at_time, 
+                unit_price_at_time, batch_number
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                generateUUID(), prodId, -requestedQty, product.quantity, product.quantity - requestedQty,
+                'SALE', `Sale ${finalTransactionId}`, saleId, finalUserId, cost, price, product.batch_number
+            ]
+        );
     }
 
     // 2. Insert Sale Header
+    const payments = body.payments && Array.isArray(body.payments) ? body.payments : [];
+    const mainPaymentMethod = payments.length > 1 ? 'Split' : (payments[0]?.mode || payment_method || 'Cash');
+
     await connection.query(
         `INSERT INTO sales (
             id, user_id, total, discount, manual_discount, tax_amount, payment_method, 
@@ -473,11 +487,28 @@ const handleSaleCreation = async (body, connection) => {
             sale_type, transaction_id, cashier_name, cashier_email, cashier_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-            saleId, finalUserId, Number(total) || 0, Number(discount) || 0, Number(manualDiscount) || 0, Number(tax_amount) || 0, payment_method || 'Cash',
+            saleId, finalUserId, Number(total) || 0, Number(discount) || 0, Number(manualDiscount) || 0, Number(tax_amount) || 0, mainPaymentMethod,
             customerName || 'Walk-in Customer', customerPhone, businessName, businessAddress,
             saleType || 'retail', finalTransactionId, cashierName || 'Admin', cashierEmail, cashierId
         ]
     );
+
+    // 2.1 Insert Payment Records for Split Payments
+    if (payments.length > 0) {
+        const paymentValues = payments.map(p => [
+            generateUUID(), saleId, p.mode, Number(p.amount) || 0
+        ]);
+        await connection.query(
+            `INSERT INTO payment_records (id, sale_id, payment_method, amount) VALUES ?`,
+            [paymentValues]
+        );
+    } else {
+        // Fallback for single payment method if payments array is missing
+        await connection.query(
+            `INSERT INTO payment_records (id, sale_id, payment_method, amount) VALUES (?, ?, ?, ?)`,
+            [generateUUID(), saleId, payment_method || 'Cash', Number(total) || 0]
+        );
+    }
 
     // 3. Insert Sales Items
     await connection.query(
@@ -1105,6 +1136,141 @@ app.get('/api/:table', requireAuth, async (req, res) => {
     }
 });
 
+// --- SHIFT MANAGEMENT SPECIAL ROUTES ---
+
+app.get('/api/shifts/active', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            'SELECT * FROM shifts WHERE user_id = ? AND status = "open" ORDER BY start_time DESC LIMIT 1',
+            [req.user.id]
+        );
+        res.json(rows[0] || null);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch active shift' });
+    }
+});
+
+app.post('/api/shifts/open', requireAuth, async (req, res) => {
+    try {
+        const { opening_balance, notes } = req.body;
+
+        // Check for existing open shift
+        const [active] = await pool.query(
+            'SELECT id FROM shifts WHERE user_id = ? AND status = "open"',
+            [req.user.id]
+        );
+
+        if (active.length > 0) {
+            return res.status(400).json({ error: 'You already have an active shift open.' });
+        }
+
+        const id = generateUUID();
+        await pool.query(
+            'INSERT INTO shifts (id, user_id, opening_balance, notes, status) VALUES (?, ?, ?, ?, "open")',
+            [id, req.user.id, opening_balance || 0, notes]
+        );
+
+        res.json({ success: true, id });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to open shift' });
+    }
+});
+
+app.post('/api/shifts/close/:id', requireAuth, async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        const { id } = req.params;
+        const { actual_cash, notes } = req.body;
+
+        await connection.beginTransaction();
+
+        // Calculate shift totals
+        const [shift] = await connection.query('SELECT * FROM shifts WHERE id = ? FOR UPDATE', [id]);
+        if (shift.length === 0) throw new Error('Shift not found');
+
+        const startTime = shift[0].start_time;
+
+        // Sum sales for this shift
+        const [sales] = await connection.query(
+            'SELECT SUM(total) as total FROM sales WHERE user_id = ? AND created_at >= ? AND status = "completed"',
+            [req.user.id, startTime]
+        );
+        const totalSales = Number(sales[0].total) || 0;
+
+        // Sum expenses (when we implement them, for now 0)
+        const totalExpenses = 0;
+
+        const expectedCash = Number(shift[0].opening_balance) + totalSales - totalExpenses;
+
+        await connection.query(
+            `UPDATE shifts SET 
+                end_time = NOW(), 
+                status = "closed", 
+                total_sales = ?, 
+                total_expenses = ?, 
+                expected_cash = ?, 
+                actual_cash = ?, 
+                closing_balance = ?,
+                notes = ? 
+             WHERE id = ?`,
+            [totalSales, totalExpenses, expectedCash, actual_cash, actual_cash, notes, id]
+        );
+
+        // Auto-create reconciliation record
+        const reconId = generateUUID();
+        const difference = (Number(actual_cash) || 0) - expectedCash;
+
+        await connection.query(
+            `INSERT INTO cash_reconciliations (id, shift_id, user_id, expected_amount, actual_amount, difference, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [reconId, id, req.user.id, expectedCash, actual_cash, difference, difference === 0 ? 'verified' : 'discrepancy']
+        );
+
+        await connection.commit();
+        res.json({ success: true, reconciliationId: reconId });
+    } catch (err) {
+        await connection.rollback();
+        res.status(500).json({ error: 'Failed to close shift', message: err.message });
+    } finally {
+        connection.release();
+    }
+});
+
+app.get('/api/expenses', requireAuth, async (req, res) => {
+    try {
+        const { category, startDate, endDate, searchTerm } = req.query;
+        let query = 'SELECT * FROM expenses WHERE 1=1';
+        const params = [];
+
+        if (category && category !== 'all') {
+            query += ' AND category = ?';
+            params.push(category);
+        }
+
+        if (startDate) {
+            query += ' AND created_at >= ?';
+            params.push(startDate);
+        }
+
+        if (endDate) {
+            query += ' AND created_at <= ?';
+            params.push(endDate);
+        }
+
+        if (searchTerm) {
+            query += ' AND (description LIKE ? OR category LIKE ?)';
+            params.push(`%${searchTerm}%`, `%${searchTerm}%`);
+        }
+
+        query += ' ORDER BY created_at DESC';
+
+        const [rows] = await pool.query(query, params);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch expenses' });
+    }
+});
+
 app.post('/api/:table', requireAuth, async (req, res) => {
     try {
         const { table } = req.params;
@@ -1352,14 +1518,47 @@ app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
                         const qty = parseInt(item.quantity) || 0;
 
                         if (prodId && qty > 0) {
-                            await connection.query(
-                                'UPDATE inventory SET quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                                [qty, prodId]
-                            );
-                            console.log(`[Server]   - Restored ${qty} to Inventory ID ${prodId}`);
-                            logToFile(`[Server] Restored ${qty} to inventory ${prodId}`);
+                            const [prodRows] = await connection.query('SELECT quantity FROM inventory WHERE id = ? FOR UPDATE', [prodId]);
+                            if (prodRows.length > 0) {
+                                const oldQty = prodRows[0].quantity;
+                                await connection.query(
+                                    'UPDATE inventory SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?',
+                                    [qty, prodId]
+                                );
+
+                                // Record Movement for Refund
+                                await connection.query(
+                                    `INSERT INTO stock_movements (id, product_id, quantity_change, previous_quantity, new_quantity, type, reason, reference_id, created_by) 
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    [generateUUID(), prodId, qty, oldQty, oldQty + qty, 'RETURN', `Refund Restore ${targetId}`, targetId, req.user.id]
+                                );
+                            }
                         }
                     }
+                }
+            }
+        }
+
+        // --- SPECIAL LOGIC: Handle Inventory Adjustment Recording ---
+        if (table === 'inventory' && data.quantity !== undefined) {
+            // This is a manual quantity update from the inventory page
+            const [prodRows] = await connection.query('SELECT name, quantity, cost_price, unit_price, batch_number FROM inventory WHERE id = ? FOR UPDATE', [targetId]);
+            if (prodRows.length > 0) {
+                const oldQty = prodRows[0].quantity;
+                const newQty = Number(data.quantity);
+                const diff = newQty - oldQty;
+
+                if (diff !== 0) {
+                    await connection.query(
+                        `INSERT INTO stock_movements (id, product_id, quantity_change, previous_quantity, new_quantity, type, reason, created_by, cost_price_at_time, unit_price_at_time, batch_number) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            generateUUID(), targetId, diff, oldQty, newQty,
+                            'ADJUSTMENT', 'Manual Adjustment', req.user.id,
+                            prodRows[0].cost_price, prodRows[0].unit_price, prodRows[0].batch_number
+                        ]
+                    );
+                    logToFile(`STOCK ADJUSTMENT: ${prodRows[0].name} ${oldQty} -> ${newQty} (diff: ${diff})`);
                 }
             }
         }

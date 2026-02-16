@@ -16,14 +16,15 @@ interface CompleteSaleOptions {
   cashierName?: string;
   cashierEmail?: string;
   cashierId?: string;
-  transactionId?: string; // Allow passing a pre-generated ID
+  transactionId?: string;
+  payments?: { mode: string; amount: number }[];
 }
 
 export const useSalesCompletion = (
   items: SaleItem[],
   calculateTotal: () => number,
-  discount: number, // Add discount percentage
-  manualDiscount: number, // Add manual discount amount
+  discount: number,
+  manualDiscount: number,
   clearItems: () => void,
   clearDiscount: () => void,
   resetSaleType: () => void
@@ -69,8 +70,8 @@ export const useSalesCompletion = (
       const saleData = {
         items: [...items],
         total: calculateTotal(),
-        discount: discount, // Use actual discount percentage
-        manualDiscount: manualDiscount, // Include manual discount amount
+        discount: discount,
+        manualDiscount: manualDiscount,
         customerName: options?.customerName,
         customerPhone: options?.customerPhone,
         businessName: options?.businessName,
@@ -78,9 +79,10 @@ export const useSalesCompletion = (
         cashierName: options?.cashierName,
         cashierEmail: options?.cashierEmail,
         cashierId: options?.cashierId,
-        user_id: options?.cashierId, // Ensure user_id is set to cashier's ID
+        user_id: options?.cashierId,
         transactionId,
-        saleType: currentSaleType
+        saleType: currentSaleType,
+        payments: options?.payments || [{ mode: 'cash', amount: calculateTotal() }]
       };
 
       // If offline, save this sale for later sync

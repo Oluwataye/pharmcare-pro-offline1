@@ -55,9 +55,9 @@ echo.
 echo [2/5] Ensuring Database is running...
 
 :: Try starting MySQL service (Standard names: MySQL, MySQL80)
-net start MySQL80 >nul 2>&1
+net start MySQL >nul 2>&1
 if %errorlevel% neq 0 (
-    net start MySQL >nul 2>&1
+    net start MySQL80 >nul 2>&1
 )
 
 :: Verify MySQL is running
