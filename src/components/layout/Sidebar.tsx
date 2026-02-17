@@ -21,6 +21,9 @@ import {
   Clock,
   CheckCircle2,
   Wallet,
+  Activity,
+  GraduationCap,
+  ShieldAlert,
 } from "lucide-react";
 import { NairaSign } from "../icons/NairaSign";
 
@@ -124,9 +127,33 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       condition: canAccessReports()
     },
     {
+      icon: Activity,
+      label: "Analytics",
+      path: "/analytics",
+      condition: canAccessReports()
+    },
+    {
+      icon: Wallet,
+      label: "Credit Management",
+      path: "/credit-management",
+      condition: true
+    },
+    {
       icon: Settings,
       label: "Settings",
       path: "/settings",
+      condition: true
+    },
+    {
+      icon: ShieldAlert,
+      label: "Technical Guide",
+      path: "/technical-guide",
+      condition: true
+    },
+    {
+      icon: GraduationCap,
+      label: "Training",
+      path: "/training",
       condition: true
     },
   ];

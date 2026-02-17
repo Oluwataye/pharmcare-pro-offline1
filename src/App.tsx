@@ -30,7 +30,10 @@ const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Suppliers = lazy(() => import("./pages/Suppliers"));
-const LiveAnalytics = lazy(() => import("./pages/admin/LiveAnalytics"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const CreditManagement = lazy(() => import("./pages/CreditManagement"));
+const TechnicalGuide = lazy(() => import("./pages/TechnicalGuide"));
+const Training = lazy(() => import("./pages/Training"));
 const ShiftManagement = lazy(() => import("./pages/ShiftManagement"));
 const CashReconciliation = lazy(() => import("./pages/CashReconciliation"));
 const Expenses = lazy(() => import("./pages/Expenses"));
@@ -179,7 +182,17 @@ const App = ({ queryClient, persister }: AppProps) => (
                     <ProtectedRoute
                       requiredPermission={{ action: "read", resource: "reports" }}
                     >
-                      <Suspense fallback={<PageLoader />}><LiveAnalytics /></Suspense>
+                      <Suspense fallback={<PageLoader />}><Analytics /></Suspense>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/credit-management"
+                  element={
+                    <ProtectedRoute
+                      requiredPermission={{ action: "read", resource: "credit" }}
+                    >
+                      <Suspense fallback={<PageLoader />}><CreditManagement /></Suspense>
                     </ProtectedRoute>
                   }
                 />
@@ -206,6 +219,22 @@ const App = ({ queryClient, persister }: AppProps) => (
                   element={
                     <ProtectedRoute>
                       <Suspense fallback={<PageLoader />}><Expenses /></Suspense>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/technical-guide"
+                  element={
+                    <ProtectedRoute>
+                      <Suspense fallback={<PageLoader />}><TechnicalGuide /></Suspense>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/training"
+                  element={
+                    <ProtectedRoute>
+                      <Suspense fallback={<PageLoader />}><Training /></Suspense>
                     </ProtectedRoute>
                   }
                 />

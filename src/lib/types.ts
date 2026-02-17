@@ -25,7 +25,7 @@ export interface AuthState {
 
 export interface Permission {
   action: 'create' | 'read' | 'update' | 'delete';
-  resource: 'inventory' | 'sales' | 'users' | 'settings' | 'reports' | 'wholesale' | 'expenses';
+  resource: 'inventory' | 'sales' | 'users' | 'settings' | 'reports' | 'wholesale' | 'expenses' | 'credit' | 'analytics';
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -51,6 +51,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { action: 'read', resource: 'expenses' },
     { action: 'create', resource: 'expenses' },
     { action: 'delete', resource: 'expenses' },
+    { action: 'read', resource: 'credit' },
+    { action: 'create', resource: 'credit' },
+    { action: 'read', resource: 'analytics' },
   ],
   ADMIN: [
     { action: 'create', resource: 'inventory' },
@@ -74,6 +77,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { action: 'read', resource: 'expenses' },
     { action: 'create', resource: 'expenses' },
     { action: 'delete', resource: 'expenses' },
+    { action: 'read', resource: 'credit' },
+    { action: 'create', resource: 'credit' },
+    { action: 'read', resource: 'analytics' },
   ],
   PHARMACIST: [
     { action: 'create', resource: 'inventory' },
@@ -86,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { action: 'create', resource: 'wholesale' },
     { action: 'read', resource: 'wholesale' },
     { action: 'update', resource: 'wholesale' },
+    { action: 'read', resource: 'credit' },
   ],
   CASHIER: [
     { action: 'create', resource: 'sales' },
@@ -93,6 +100,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { action: 'read', resource: 'inventory' },
     { action: 'create', resource: 'wholesale' },
     { action: 'read', resource: 'wholesale' },
+    { action: 'read', resource: 'credit' },
   ],
   DISPENSER: [
     { action: 'create', resource: 'sales' },
@@ -100,5 +108,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { action: 'read', resource: 'inventory' },
     { action: 'create', resource: 'wholesale' },
     { action: 'read', resource: 'wholesale' },
+    { action: 'read', resource: 'credit' },
   ],
 };
