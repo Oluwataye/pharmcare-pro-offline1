@@ -45,34 +45,42 @@ const ShiftManagement = () => {
         setCash("");
     };
 
-    if (!isAdmin && !activeShift) {
+    if (!activeShift && !isAdmin) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-                <Clock className="h-12 w-12 text-muted-foreground" />
-                <h2 className="text-xl font-semibold">Shift Not Started</h2>
-                <p className="text-muted-foreground">You must start your shift to begin processing sales.</p>
-                <Button onClick={() => setIsOpeningShift(true)}>Start New Shift</Button>
+            <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6 container">
+                <div className="p-8 bg-card rounded-2xl shadow-xl border flex flex-col items-center text-center space-y-4 max-w-md w-full">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Clock className="h-8 w-8 text-primary animate-pulse" />
+                    </div>
+                    <h2 className="text-2xl font-bold">Shift Not Started</h2>
+                    <p className="text-muted-foreground">You must start your duty shift before you can process sales or manage inventory transactions.</p>
+                    <Button size="lg" className="w-full font-bold shadow-lg" onClick={() => setIsOpeningShift(true)}>
+                        <Play className="mr-2 h-5 w-5" /> Start New Shift
+                    </Button>
+                </div>
 
                 <Dialog open={isOpeningShift} onOpenChange={setIsOpeningShift}>
-                    <DialogContent>
+                    <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                            <DialogTitle>Start New Shift</DialogTitle>
-                            <DialogDescription>Enter your opening cash balance to begin.</DialogDescription>
+                            <DialogTitle className="text-2xl font-bold">Start Duty Shift</DialogTitle>
+                            <DialogDescription>Record your opening cash balance to begin your session.</DialogDescription>
                         </DialogHeader>
-                        <div className="py-4 space-y-4">
+                        <div className="py-6 space-y-4">
                             <div className="space-y-2">
-                                <Label>Opening Balance (₦)</Label>
+                                <Label className="text-sm font-semibold">Opening Cash in Drawer (₦)</Label>
                                 <Input
                                     type="number"
                                     value={openingBalance}
                                     onChange={(e) => setOpeningBalance(e.target.value)}
                                     placeholder="0.00"
+                                    className="text-lg font-mono"
+                                    autoFocus
                                 />
                             </div>
                         </div>
-                        <DialogFooter>
+                        <DialogFooter className="gap-2">
                             <Button variant="outline" onClick={() => setIsOpeningShift(false)}>Cancel</Button>
-                            <Button onClick={handleStartShift}>Open Shift</Button>
+                            <Button className="font-bold flex-1" onClick={handleStartShift}>Open Shift</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
@@ -84,18 +92,60 @@ const ShiftManagement = () => {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500 p-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                    <History className="h-6 w-6 text-primary" />
-                    Shift Management
-                </h1>
-                {activeShift && (
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 py-1 px-3">
-                        <Clock className="h-4 w-4 mr-2" />
-                        Shift Active: {new Date(activeShift.start_time).toLocaleTimeString()}
-                    </Badge>
-                )}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h1 className="text-3xl font-extrabold flex items-center gap-3 tracking-tight">
+                        <History className="h-8 w-8 text-primary" />
+                        Shift Management
+                    </h1>
+                    <p className="text-muted-foreground mt-1">Monitor and coordinate staff duty sessions.</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    {!activeShift ? (
+                        <Button
+                            variant="default"
+                            className="font-bold shadow-md bg-green-600 hover:bg-green-700"
+                            onClick={() => setIsOpeningShift(true)}
+                        >
+                            <Play className="h-4 w-4 mr-2" />
+                            Start My Shift
+                        </Button>
+                    ) : (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 py-1.5 px-4 shadow-sm animate-in fade-in zoom-in duration-300">
+                            <div className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse" />
+                            <span className="font-semibold mr-2">Shift Active:</span>
+                            {new Date(activeShift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Badge>
+                    )}
+                </div>
             </div>
+
+            <Dialog open={isOpeningShift} onOpenChange={setIsOpeningShift}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-bold">Start Your Shift</DialogTitle>
+                        <DialogDescription>Enter your opening cash balance to proceed with sales activity.</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-6 space-y-4">
+                        <div className="space-y-2">
+                            <Label className="text-sm font-semibold">Opening Cash in Drawer (₦)</Label>
+                            <Input
+                                type="number"
+                                value={openingBalance}
+                                onChange={(e) => setOpeningBalance(e.target.value)}
+                                placeholder="0.00"
+                                className="text-lg font-mono"
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setIsOpeningShift(false)}>Cancel</Button>
+                        <Button className="font-bold flex-1" onClick={handleStartShift}>Begin Shift</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20 shadow-sm">

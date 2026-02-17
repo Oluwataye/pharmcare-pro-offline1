@@ -24,7 +24,21 @@ import {
   Activity,
   GraduationCap,
   ShieldAlert,
+  Play,
+  Lock,
 } from "lucide-react";
+import { useShift } from "@/hooks/useShift";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { NairaSign } from "../icons/NairaSign";
 
 interface SidebarProps {
@@ -44,6 +58,9 @@ const Sidebar = ({ onClose }: SidebarProps) => {
   const { settings: storeSettings } = useStoreSettings();
   const [storeLogo, setStoreLogo] = useState<string>('');
   const [storeName, setStoreName] = useState<string>('PharmCare Pro');
+  const { activeShift, startShift } = useShift();
+  const [isOpeningShift, setIsOpeningShift] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState("");
 
   useEffect(() => {
     if (storeSettings) {
@@ -209,6 +226,12 @@ const Sidebar = ({ onClose }: SidebarProps) => {
     navigate("/login");
   };
 
+  const handleStartShift = async () => {
+    await startShift(Number(openingBalance));
+    setIsOpeningShift(false);
+    setOpeningBalance("");
+  };
+
   return (
     <div className="flex h-full md:h-screen w-full md:w-64 flex-col bg-gradient-to-b from-background to-muted/30 border-r shadow-sm">
       {/* Header with Logo and Store Name */}
@@ -239,7 +262,7 @@ const Sidebar = ({ onClose }: SidebarProps) => {
 
       {/* User Profile Section */}
       {user && (
-        <div className="px-4 py-4 border-b bg-card/50">
+        <div className="px-4 py-4 border-b bg-card/50 space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 border-2 border-primary/20">
               <span className="text-sm font-semibold text-primary">
@@ -254,10 +277,63 @@ const Sidebar = ({ onClose }: SidebarProps) => {
                 {user.role.toLowerCase().replace('_', ' ')}
               </p>
             </div>
-            <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" title="Online" />
+          </div>
+
+          {/* Shift Status Quick Action */}
+          <div className="pt-2">
+            {!activeShift ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs h-8 bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 font-bold"
+                onClick={() => setIsOpeningShift(true)}
+              >
+                <Play className="h-3 w-3 mr-1.5" /> Start My Shift
+              </Button>
+            ) : (
+              <div
+                className="flex items-center justify-between p-2 rounded-md bg-green-50/50 border border-green-100 cursor-pointer hover:bg-green-50 transition-colors"
+                onClick={() => navigate('/shifts')}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-[10px] font-bold text-green-700 uppercase tracking-wider">Shift Active</span>
+                </div>
+                <span className="text-[10px] font-mono text-green-600">
+                  {new Date(activeShift.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Start Shift Dialog (Global Access) */}
+      <Dialog open={isOpeningShift} onOpenChange={setIsOpeningShift}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Quick Start Shift</DialogTitle>
+            <DialogDescription>Setting your opening balance to begin duty.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Opening Cash (₦)</Label>
+              <Input
+                type="number"
+                value={openingBalance}
+                onChange={(e) => setOpeningBalance(e.target.value)}
+                placeholder="0.00"
+                className="font-mono"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsOpeningShift(false)}>Cancel</Button>
+            <Button size="sm" className="font-bold flex-1" onClick={handleStartShift}>Start Now</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Navigation Menu */}
       <nav className="flex-1 space-y-1 p-3 overflow-y-auto custom-scrollbar">
