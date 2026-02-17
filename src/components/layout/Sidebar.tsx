@@ -52,6 +52,11 @@ const Sidebar = ({ onClose }: SidebarProps) => {
     }
   }, [storeSettings]);
 
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({
+    Sales: true,
+    Terminal: false
+  });
+
   const menuItems = [
     {
       icon: LayoutDashboard,
@@ -63,50 +68,66 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       icon: Package,
       label: "Inventory",
       path: "/inventory",
-      // Only show Inventory for users with proper permissions
       condition: canAccessInventory()
     },
     {
       icon: ShoppingCart,
       label: "Sales",
       path: "/sales",
-      condition: true
+      condition: true,
+      children: [
+        {
+          icon: NairaSign,
+          label: "Point of Sale",
+          path: "/sales"
+        },
+        {
+          icon: Receipt,
+          label: "Receipts",
+          path: "/receipts"
+        },
+        {
+          icon: Printer,
+          label: "Print History",
+          path: "/print-history",
+          condition: canAccessReports()
+        },
+        {
+          icon: ShoppingCart,
+          label: "Refunds",
+          path: "/refunds",
+          condition: canAccessReports()
+        },
+      ]
     },
     {
       icon: Clock,
-      label: "Shift Management",
+      label: "Staff Shifts",
       path: "/shifts",
       condition: true
     },
     {
-      icon: CheckCircle2,
-      label: "Reconciliation",
-      path: "/reconciliation",
-      condition: canAccessReports()
-    },
-    {
-      icon: Receipt,
-      label: "Receipts",
-      path: "/receipts",
-      condition: true
-    },
-    {
-      icon: Printer,
-      label: "Print History",
-      path: "/print-history",
-      condition: canAccessReports()
-    },
-    {
-      icon: NairaSign,
-      label: "Refunds",
-      path: "/refunds",
-      condition: canAccessReports()
-    },
-    {
-      icon: Users,
-      label: "Suppliers",
-      path: "/suppliers",
-      condition: canAccessInventory()
+      icon: FileText,
+      label: "Reports",
+      path: "/reports",
+      condition: canAccessReports(),
+      children: [
+        {
+          icon: FileText,
+          label: "Standard Reports",
+          path: "/reports"
+        },
+        {
+          icon: Activity,
+          label: "Live Analytics",
+          path: "/analytics"
+        },
+        {
+          icon: CheckCircle2,
+          label: "Cash Reconciliation",
+          path: "/reconciliation"
+        },
+      ]
     },
     {
       icon: Wallet,
@@ -115,28 +136,22 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       condition: canAccessExpenses()
     },
     {
+      icon: Wallet,
+      label: "Credit Manager",
+      path: "/credit-management",
+      condition: true
+    },
+    {
+      icon: Users,
+      label: "Suppliers",
+      path: "/suppliers",
+      condition: canAccessInventory()
+    },
+    {
       icon: Users,
       label: "Users",
       path: "/users",
       condition: canAccessUsers()
-    },
-    {
-      icon: FileText,
-      label: "Reports",
-      path: "/reports",
-      condition: canAccessReports()
-    },
-    {
-      icon: Activity,
-      label: "Analytics",
-      path: "/analytics",
-      condition: canAccessReports()
-    },
-    {
-      icon: Wallet,
-      label: "Credit Management",
-      path: "/credit-management",
-      condition: true
     },
     {
       icon: Settings,
@@ -145,18 +160,42 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       condition: true
     },
     {
-      icon: ShieldAlert,
-      label: "Technical Guide",
+      icon: LayoutDashboard,
+      label: "Terminal Utility",
       path: "/technical-guide",
-      condition: true
-    },
-    {
-      icon: GraduationCap,
-      label: "Training",
-      path: "/training",
-      condition: true
-    },
+      condition: true,
+      children: [
+        {
+          icon: ShieldAlert,
+          label: "Technical Guide",
+          path: "/technical-guide"
+        },
+        {
+          icon: GraduationCap,
+          label: "Training",
+          path: "/training"
+        }
+      ]
+    }
   ];
+
+  // Auto-expand menu if a child is active
+  useEffect(() => {
+    menuItems.forEach(item => {
+      if (item.children) {
+        const isChildActive = item.children.some(child =>
+          location.pathname === child.path || (child.path !== '/' && location.pathname.startsWith(child.path))
+        );
+        if (isChildActive) {
+          setExpandedMenus(prev => ({ ...prev, [item.label]: true }));
+        }
+      }
+    });
+  }, [location.pathname]);
+
+  const toggleMenu = (label: string) => {
+    setExpandedMenus(prev => ({ ...prev, [label]: !prev[label] }));
+  };
 
   const handleNavigate = (path: string) => {
     navigate(path);
@@ -221,26 +260,81 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       )}
 
       {/* Navigation Menu */}
-      <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
+      <nav className="flex-1 space-y-1 p-3 overflow-y-auto custom-scrollbar">
         {menuItems.map((item) => {
           if (!item.condition) return null;
 
-          const isActive = location.pathname === item.path;
+          const hasChildren = item.children && item.children.length > 0;
+          const isExpanded = expandedMenus[item.label];
+
+          // Check if parent is active (either directly or via children)
+          const isParentActive = item.path === "/"
+            ? location.pathname === "/"
+            : location.pathname === item.path ||
+            location.pathname.startsWith(item.path + "/") ||
+            (item.children?.some(child => location.pathname === child.path || (child.path !== '/' && location.pathname.startsWith(child.path))));
+
           return (
-            <Button
-              key={item.path}
-              variant={isActive ? "secondary" : "ghost"}
-              className={cn(
-                "w-full justify-start gap-3 h-11 px-4 transition-all duration-200",
-                isActive
-                  ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 border-l-4 border-primary"
-                  : "hover:bg-accent/50 hover:translate-x-1 border-l-4 border-transparent"
+            <div key={item.label} className="space-y-1">
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-between items-center h-11 px-4 transition-all duration-200 group border-l-4",
+                  isParentActive
+                    ? "bg-primary text-primary-foreground shadow-md border-primary"
+                    : "hover:bg-accent/50 hover:translate-x-1 border-transparent"
+                )}
+                onClick={() => {
+                  if (hasChildren) {
+                    toggleMenu(item.label);
+                  } else {
+                    handleNavigate(item.path);
+                  }
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <item.icon className={cn(
+                    "h-5 w-5 transition-colors",
+                    isParentActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary"
+                  )} />
+                  <span className={cn("font-medium", isParentActive && "font-semibold")}>
+                    {item.label}
+                  </span>
+                </div>
+                {hasChildren && (
+                  <ChevronLeft className={cn(
+                    "h-4 w-4 transition-transform duration-200",
+                    isExpanded ? "-rotate-90" : ""
+                  )} />
+                )}
+              </Button>
+
+              {hasChildren && isExpanded && (
+                <div className="ml-4 pl-4 border-l-2 border-primary/10 space-y-1 animate-in fade-in slide-in-from-left-2 duration-200">
+                  {item.children!.map((child) => {
+                    if (child.condition === false) return null;
+                    const isChildActive = location.pathname === child.path || (child.path !== '/' && location.pathname.startsWith(child.path));
+
+                    return (
+                      <Button
+                        key={child.path}
+                        variant="ghost"
+                        className={cn(
+                          "w-full justify-start gap-3 h-10 px-4 transition-all duration-200 text-sm",
+                          isChildActive
+                            ? "bg-primary text-primary-foreground shadow-sm border-l-4 border-primary"
+                            : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
+                        )}
+                        onClick={() => handleNavigate(child.path)}
+                      >
+                        <child.icon className={cn("h-4 w-4", isChildActive ? "text-primary-foreground" : "text-muted-foreground")} />
+                        <span>{child.label}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
               )}
-              onClick={() => handleNavigate(item.path)}
-            >
-              <item.icon className={cn("h-5 w-5", isActive ? "text-primary-foreground" : "text-muted-foreground")} />
-              <span className={cn("font-medium", isActive && "font-semibold")}>{item.label}</span>
-            </Button>
+            </div>
           );
         })}
       </nav>
@@ -265,5 +359,6 @@ const Sidebar = ({ onClose }: SidebarProps) => {
     </div>
   );
 };
+
 
 export default Sidebar;
