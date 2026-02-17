@@ -1197,8 +1197,12 @@ app.post('/api/shifts/close/:id', requireAuth, async (req, res) => {
         );
         const totalSales = Number(sales[0].total) || 0;
 
-        // Sum expenses (when we implement them, for now 0)
-        const totalExpenses = 0;
+        // Sum expenses for this shift
+        const [expenseRows] = await connection.query(
+            'SELECT SUM(amount) as total FROM expenses WHERE user_id = ? AND created_at >= ?',
+            [req.user.id, startTime]
+        );
+        const totalExpenses = Number(expenseRows[0].total) || 0;
 
         const expectedCash = Number(shift[0].opening_balance) + totalSales - totalExpenses;
 
@@ -1277,13 +1281,7 @@ app.post('/api/:table', requireAuth, async (req, res) => {
         const userRole = req.user.role.toUpperCase();
 
         // Strict Table Whitelist
-        const allowedTables = [
-            'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
-            'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
-            'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements'
-        ];
-
-        if (!allowedTables.includes(table)) {
+        if (!ALLOWED_TABLES.includes(table)) {
             return res.status(400).json({ error: 'Invalid or restricted table' });
         }
 
@@ -1618,13 +1616,7 @@ app.delete('/api/:table', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res
         const { table } = req.params;
 
         // Strict Table Whitelist
-        const allowedTables = [
-            'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
-            'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
-            'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements'
-        ];
-
-        if (!allowedTables.includes(table)) {
+        if (!ALLOWED_TABLES.includes(table)) {
             return res.status(400).json({ error: 'Invalid or restricted table' });
         }
 
