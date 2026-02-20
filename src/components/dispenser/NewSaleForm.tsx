@@ -82,7 +82,7 @@ export function NewSaleForm({ onComplete, onCancel }: NewSaleFormProps) {
     fetchProducts();
   }, [toast]);
 
-  const { handlePrint, openPrintWindow } = useSalesPrinting(items, discount, isWholesale ? 'wholesale' : 'retail');
+  const { handlePrint, openPrintWindow } = useSalesPrinting(items, discount, 0, isWholesale ? 'wholesale' : 'retail');
 
   // Calculate totals
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
@@ -92,7 +92,8 @@ export function NewSaleForm({ onComplete, onCancel }: NewSaleFormProps) {
   const { completeSale } = useSalesCompletion(
     items,
     () => total,
-    discount, // Correction: Pass discount value as per my earlier fix
+    discount,
+    0, // manualDiscount
     () => setItems([]),
     () => setDiscount(0),
     () => setIsWholesale(false)
@@ -184,7 +185,7 @@ export function NewSaleForm({ onComplete, onCancel }: NewSaleFormProps) {
       const currentItems = [...items]; // Capture items for receipt
 
       // SAVE THE SALE
-      await completeSale({
+      const result = await completeSale({
         customerName: form.getValues().customerName,
         customerPhone: form.getValues().customerPhone,
         saleType: isWholesale ? 'wholesale' : 'retail',
@@ -195,7 +196,8 @@ export function NewSaleForm({ onComplete, onCancel }: NewSaleFormProps) {
       });
 
       // Update Success State
-      setLastSaleId(transactionId);
+      const finalSaleId = (result && typeof result === 'object' && 'saleId' in result) ? result.saleId : transactionId;
+      setLastSaleId(finalSaleId);
       setLastItems(currentItems);
       setIsSuccess(true);
 
@@ -203,6 +205,27 @@ export function NewSaleForm({ onComplete, onCancel }: NewSaleFormProps) {
         title: "Sale Completed",
         description: "The transaction was processed successfully",
       });
+
+      // AUTO-PRINT: Automatically trigger receipt printing
+      console.log('[useSales] Sale completed. Auto-printing receipt...', finalSaleId);
+
+      // Open print window synchronously to avoid popup blockers
+      const windowRef = openPrintWindow();
+
+      // Trigger automatic printing
+      setTimeout(() => {
+        handlePrint({
+          saleId: finalSaleId,
+          items: currentItems,
+          existingWindow: windowRef,
+          directPrint: true,
+          customerName: form.getValues().customerName,
+          customerPhone: form.getValues().customerPhone,
+          cashierName: user ? user.username || user.name : undefined,
+          cashierEmail: user ? user.email : undefined,
+          cashierId: user ? user.id : undefined,
+        });
+      }, 100); // Small delay to ensure state is updated
 
     } catch (error) {
       toast({

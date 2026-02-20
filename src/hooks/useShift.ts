@@ -30,7 +30,7 @@ export const useShift = () => {
         if (!user) return;
         try {
             const response = await fetch('/api/shifts/active', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
             });
             if (response.ok) {
                 const data = await response.json();
@@ -46,7 +46,7 @@ export const useShift = () => {
         if (!isAdmin) return;
         try {
             const response = await fetch('/api/shifts?status=eq.open', {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
             });
             if (response.ok) {
                 const data = await response.json();
@@ -63,7 +63,7 @@ export const useShift = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}`
                 },
                 body: JSON.stringify({ opening_balance: openingBalance, notes })
             });
@@ -87,7 +87,7 @@ export const useShift = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}`
                 },
                 body: JSON.stringify({ actual_cash: actualCash, notes })
             });
@@ -112,7 +112,7 @@ export const useShift = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}`
                 },
                 body: JSON.stringify({ actual_cash: actualCash, notes: notes || "Administrative closure" })
             });
@@ -136,6 +136,21 @@ export const useShift = () => {
         }
     }, [user, refreshShifts]);
 
+    const fetchShiftTotals = async (shiftId: string) => {
+        try {
+            const response = await fetch(`/api/shifts/totals/${shiftId}`, {
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
+            });
+            if (response.ok) {
+                return await response.json();
+            }
+            throw new Error('Failed to fetch shift totals');
+        } catch (error) {
+            console.error('[useShift] Error fetching shift totals:', error);
+            return { cash: 0, pos: 0, transfer: 0, total: 0 };
+        }
+    };
+
     return {
         activeShift,
         activeStaffShifts,
@@ -145,6 +160,7 @@ export const useShift = () => {
         adminEndShift,
         adminPauseShift,
         adminResumeShift,
-        refreshShifts
+        refreshShifts,
+        fetchShiftTotals
     };
 };

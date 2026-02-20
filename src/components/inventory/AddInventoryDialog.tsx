@@ -14,7 +14,7 @@ import { useSuppliers } from "@/hooks/useSuppliers";
 import { SelectField, TextField } from "./form/FormField";
 import { SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { AddSupplierForm } from "@/components/suppliers/AddSupplierForm";
 
 interface AddInventoryDialogProps {
   open: boolean;
@@ -31,6 +31,7 @@ export const AddInventoryDialog = ({
 }: AddInventoryDialogProps) => {
   const [supplierId, setSupplierId] = useState<string>("none");
   const [invoiceNumber, setInvoiceNumber] = useState<string>("");
+  const [isAddingSupplier, setIsAddingSupplier] = useState(false);
   const [items, setItems] = useState<any[]>([{ ...initialInventoryFormState, id: Date.now() }]);
   const { toast } = useToast();
   const { suppliers, fetchSuppliers } = useSuppliers();
@@ -42,6 +43,7 @@ export const AddInventoryDialog = ({
       setItems([{ ...initialInventoryFormState, id: Date.now() }]);
       setSupplierId("none");
       setInvoiceNumber("");
+      setIsAddingSupplier(false);
     }
   }, [open, fetchSuppliers]);
 
@@ -57,6 +59,14 @@ export const AddInventoryDialog = ({
 
   const handleRemoveItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
+  };
+
+  const handleSupplierChange = (value: string) => {
+    if (value === "add-new") {
+      setIsAddingSupplier(true);
+    } else {
+      setSupplierId(value);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -99,60 +109,84 @@ export const AddInventoryDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(val) => {
+      if (!val && isAddingSupplier) {
+        setIsAddingSupplier(false);
+        return;
+      }
+      onOpenChange(val);
+    }}>
       <DialogContent className="sm:max-w-[750px] max-h-[95vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-6 border-b">
-          <DialogTitle>Receive Inventory (Bulk)</DialogTitle>
+          <DialogTitle>{isAddingSupplier ? "Add New Supplier" : "Receive Inventory (Bulk)"}</DialogTitle>
           <DialogDescription>
-            Select a supplier and add one or more products to your inventory.
+            {isAddingSupplier
+              ? "Enter details for the new supplier."
+              : "Select a supplier and add one or more products to your inventory."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6 scrollbar-custom">
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
-              <SelectField
-                id="supplier_id"
-                label="Supplier"
-                value={supplierId}
-                onValueChange={setSupplierId}
-                required
-              >
-                <SelectItem value="none">Select Supplier</SelectItem>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
+          {isAddingSupplier ? (
+            <AddSupplierForm
+              onSuccess={(newSupplier) => {
+                setSupplierId(newSupplier.id);
+                setIsAddingSupplier(false);
+                fetchSuppliers(); // Refresh list to include new supplier
+              }}
+              onCancel={() => setIsAddingSupplier(false)}
+            />
+          ) : (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                <SelectField
+                  id="supplier_id"
+                  label="Supplier"
+                  value={supplierId}
+                  onValueChange={handleSupplierChange}
+                  required
+                >
+                  <SelectItem value="none">Select Supplier</SelectItem>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="add-new" className="text-primary font-medium">
+                    + Add New Supplier
                   </SelectItem>
-                ))}
-              </SelectField>
+                </SelectField>
 
-              <TextField
-                id="invoice_number"
-                label="Invoice # (Optional)"
-                value={invoiceNumber}
-                onChange={setInvoiceNumber}
-                placeholder="Reference number"
+                <TextField
+                  id="invoice_number"
+                  label="Invoice # (Optional)"
+                  value={invoiceNumber}
+                  onChange={setInvoiceNumber}
+                  placeholder="Reference number"
+                />
+              </div>
+
+              <BulkProductForm
+                items={items}
+                onUpdateItem={handleUpdateItem}
+                onRemoveItem={handleRemoveItem}
+                onAddItem={handleAddItemForm}
+                categories={categories}
               />
             </div>
+          )}
+        </div>
 
-            <BulkProductForm
-              items={items}
-              onUpdateItem={handleUpdateItem}
-              onRemoveItem={handleRemoveItem}
-              onAddItem={handleAddItemForm}
-              categories={categories}
-            />
+        {!isAddingSupplier && (
+          <div className="p-6 border-t bg-muted/20 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit}>
+              Receive {items.length} Product{items.length !== 1 ? 's' : ''}
+            </Button>
           </div>
-        </div>
-
-        <div className="p-6 border-t bg-muted/20 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit}>
-            Receive {items.length} Product{items.length !== 1 ? 's' : ''}
-          </Button>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );

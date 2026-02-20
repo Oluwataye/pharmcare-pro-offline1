@@ -7,6 +7,7 @@ import { TextField, SelectField } from "@/components/inventory/form/FormField";
 import { DatePickerField } from "@/components/inventory/form/DatePickerField";
 import { UNIT_OPTIONS } from "@/components/inventory/form/formUtils";
 import { Supplier } from "@/types/supplier";
+import { AddSupplierForm } from "@/components/suppliers/AddSupplierForm";
 
 interface AddInventoryFormProps {
   formData: {
@@ -55,6 +56,7 @@ export const AddInventoryForm = ({
   // Use internal state if props are not provided (e.g., in bulk mode)
   const [internalIsAddingCategory, setInternalIsAddingCategory] = useState(false);
   const [internalCustomCategory, setInternalCustomCategory] = useState("");
+  const [isAddingSupplier, setIsAddingSupplier] = useState(false);
 
   const isAdding = propsIsAddingCategory !== undefined ? propsIsAddingCategory : internalIsAddingCategory;
   const setIsAdding = propsSetIsAddingCategory !== undefined ? propsSetIsAddingCategory : setInternalIsAddingCategory;
@@ -286,19 +288,45 @@ export const AddInventoryForm = ({
             <h3 className="text-sm font-semibold text-primary/80 uppercase tracking-wider mb-2">Supply Chain Information</h3>
           </div>
           {!isBulkMode && (
-            <SelectField
-              id="supplier_id"
-              label="Supplier"
-              value={formData.supplier_id || "none"}
-              onValueChange={(value) => handleInputChange("supplier_id", value)}
-            >
-              <SelectItem value="none">No Supplier</SelectItem>
-              {suppliers.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectField>
+            <div className="space-y-4">
+              {isAddingSupplier ? (
+                <div className="col-span-1 sm:col-span-2 p-4 bg-primary/5 rounded-lg border border-primary/20 animate-in fade-in zoom-in duration-200">
+                  <h4 className="text-sm font-semibold text-primary mb-2">New Supplier Details</h4>
+                  <AddSupplierForm
+                    onSuccess={(newSupplier) => {
+                      handleInputChange("supplier_id", newSupplier.id);
+                      setIsAddingSupplier(false);
+                      // Parent should ideally refresh suppliers list, 
+                      // but AddSupplierForm already calls fetchSuppliers() in the hook.
+                    }}
+                    onCancel={() => setIsAddingSupplier(false)}
+                  />
+                </div>
+              ) : (
+                <SelectField
+                  id="supplier_id"
+                  label="Supplier"
+                  value={formData.supplier_id || "none"}
+                  onValueChange={(value) => {
+                    if (value === "add-new") {
+                      setIsAddingSupplier(true);
+                    } else {
+                      handleInputChange("supplier_id", value);
+                    }
+                  }}
+                >
+                  <SelectItem value="none">No Supplier</SelectItem>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="add-new" className="text-primary font-medium border-t">
+                    + Add New Supplier
+                  </SelectItem>
+                </SelectField>
+              )}
+            </div>
           )}
 
           <TextField

@@ -51,7 +51,7 @@ export function useReconciliation(filters?: ReconciliationFilters) {
             // For now, we fetch the range and filter if needed or rely on basic queries
 
             const response = await fetch(`/api/shifts?${params.toString()}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
             });
 
             if (!response.ok) {

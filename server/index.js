@@ -68,7 +68,8 @@ const ALLOWED_TABLES = [
     'users', 'inventory', 'sales', 'sales_items', 'receipts', 'refunds',
     'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
     'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements',
-    'system_configs', 'database_backups', 'shifts', 'cash_reconciliations', 'expenses'
+    'system_configs', 'database_backups', 'shifts', 'cash_reconciliations', 'expenses',
+    'print_analytics'
 ];
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -1237,6 +1238,53 @@ app.post('/api/shifts/close/:id', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Failed to close shift', message: err.message });
     } finally {
         connection.release();
+    }
+});
+
+app.get('/api/shifts/history', requireAuth, async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            `SELECT s.*, u.name as staff_name 
+             FROM shifts s 
+             LEFT JOIN users u ON s.user_id = u.id 
+             ORDER BY s.start_time DESC LIMIT 100`
+        );
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch shift history' });
+    }
+});
+
+app.get('/api/shifts/totals/:id', requireAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const [shift] = await pool.query('SELECT * FROM shifts WHERE id = ?', [id]);
+        if (shift.length === 0) return res.status(404).json({ error: 'Shift not found' });
+
+        const startTime = shift[0].start_time;
+        const [sales] = await pool.query(
+            'SELECT total, payment_method FROM sales WHERE user_id = ? AND created_at >= ? AND status = "completed"',
+            [shift[0].user_id, startTime]
+        );
+
+        let cash = 0;
+        let pos = 0;
+        let transfer = 0;
+        let total = 0;
+
+        sales.forEach(sale => {
+            const amount = Number(sale.total) || 0;
+            total += amount;
+            const method = (sale.payment_method || 'cash').toLowerCase();
+            if (method.includes('cash')) cash += amount;
+            else if (method.includes('pos')) pos += amount;
+            else if (method.includes('transfer')) transfer += amount;
+            else cash += amount; // default to cash if unknown
+        });
+
+        res.json({ cash, pos, transfer, total });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch shift totals' });
     }
 });
 

@@ -6,6 +6,8 @@ import { DatePickerField } from "@/components/inventory/form/DatePickerField";
 import { UNIT_OPTIONS } from "@/components/inventory/form/formUtils";
 import { SelectItem } from "@/components/ui/select";
 import { Supplier } from "@/types/supplier";
+import { AddSupplierForm } from "@/components/suppliers/AddSupplierForm";
+import { useState } from "react";
 
 interface EditInventoryFormProps {
   formData: InventoryItem;
@@ -26,6 +28,7 @@ export const EditInventoryForm = ({
   suppliers = [],
   categories = []
 }: EditInventoryFormProps) => {
+  const [isAddingSupplier, setIsAddingSupplier] = useState(false);
 
   const handleInputChange = (field: string, value: string | number) => {
     setFormData({ ...formData, [field]: value });
@@ -194,19 +197,43 @@ export const EditInventoryForm = ({
         <div className="col-span-1 sm:col-span-2">
           <h3 className="text-sm font-semibold text-muted-foreground mb-1">Supply Chain Details</h3>
         </div>
-        <SelectField
-          id="edit-supplier_id"
-          label="Supplier"
-          value={formData.supplier_id || "none"}
-          onValueChange={(value) => handleInputChange("supplier_id", value)}
-        >
-          <SelectItem value="none">No Supplier</SelectItem>
-          {suppliers.map((s) => (
-            <SelectItem key={s.id} value={s.id}>
-              {s.name}
-            </SelectItem>
-          ))}
-        </SelectField>
+        <div className="space-y-4">
+          {isAddingSupplier ? (
+            <div className="col-span-1 sm:col-span-2 p-4 bg-primary/5 rounded-lg border border-primary/20 animate-in fade-in zoom-in duration-200">
+              <h4 className="text-sm font-semibold text-primary mb-2">New Supplier Details</h4>
+              <AddSupplierForm
+                onSuccess={(newSupplier) => {
+                  handleInputChange("supplier_id", newSupplier.id);
+                  setIsAddingSupplier(false);
+                }}
+                onCancel={() => setIsAddingSupplier(false)}
+              />
+            </div>
+          ) : (
+            <SelectField
+              id="edit-supplier_id"
+              label="Supplier"
+              value={formData.supplier_id || "none"}
+              onValueChange={(value) => {
+                if (value === "add-new") {
+                  setIsAddingSupplier(true);
+                } else {
+                  handleInputChange("supplier_id", value);
+                }
+              }}
+            >
+              <SelectItem value="none">No Supplier</SelectItem>
+              {suppliers.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+              <SelectItem value="add-new" className="text-primary font-medium border-t">
+                + Add New Supplier
+              </SelectItem>
+            </SelectField>
+          )}
+        </div>
 
         <TextField
           id="edit-restock_invoice_number"

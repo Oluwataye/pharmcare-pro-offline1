@@ -26,9 +26,9 @@ export const useSuppliers = () => {
         }
     }, [toast]);
 
-    const addSupplier = async (supplier: NewSupplier) => {
+    const addSupplier = async (supplier: NewSupplier): Promise<Supplier | null> => {
         try {
-            const { data, error } = await db.from('suppliers').insert(supplier).select();
+            const { data, error } = await db.from('suppliers').insert(supplier).select().single();
             if (error) throw error;
 
             toast({
@@ -36,7 +36,7 @@ export const useSuppliers = () => {
                 description: 'Supplier added successfully',
             });
             fetchSuppliers();
-            return true;
+            return data;
         } catch (error) {
             console.error('Error adding supplier:', error);
             toast({
@@ -44,7 +44,7 @@ export const useSuppliers = () => {
                 description: 'Failed to add supplier',
                 variant: 'destructive',
             });
-            return false;
+            return null;
         }
     };
 

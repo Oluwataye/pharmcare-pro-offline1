@@ -37,7 +37,7 @@ export const useExpenses = (filters?: ExpenseFilters) => {
             if (filters?.searchTerm) params.append('searchTerm', filters.searchTerm);
 
             const response = await fetch(`/api/expenses?${params.toString()}`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
             });
 
             if (!response.ok) throw new Error('Failed to fetch expenses');
@@ -57,7 +57,7 @@ export const useExpenses = (filters?: ExpenseFilters) => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}`
                 },
                 body: JSON.stringify(expense)
             });
@@ -78,7 +78,7 @@ export const useExpenses = (filters?: ExpenseFilters) => {
         mutationFn: async (id: string) => {
             const response = await fetch(`/api/expenses/${id}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
             });
 
             if (!response.ok) throw new Error('Failed to delete expense');
