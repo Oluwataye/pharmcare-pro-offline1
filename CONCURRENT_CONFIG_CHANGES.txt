@@ -1,0 +1,23 @@
+PHARMCARE PRO CONCURRENT CONFIGURATION CHANGES LOG
+==============================================
+
+DATE/TIME: 2026-05-16 10:20 AM
+------------------------------
+
+1. FILE: .env (root)
+   ORIGINAL: VITE_API_URL=http://pharmcarepro/api, PORT=80
+   NEW: VITE_API_URL=http://localhost:3100/api, PORT=3100
+   REASON: Reallocate port to avoid conflict with VisionCare EMR.
+
+2. FILE: server/.env
+   ORIGINAL: PORT=80
+   NEW: PORT=3100
+   REASON: Align backend listener with new port allocation.
+
+3. FILE: START_PHARMCARE.bat
+   ORIGINAL: Multiple references to Port 80 and http://pharmcarepro/
+   NEW: Multiple references to Port 3100 and http://localhost:3100/
+   REASON: Update startup monitoring and browser launch URL.
+
+------------------------------
+END OF LOG

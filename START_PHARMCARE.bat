@@ -16,14 +16,14 @@ echo.
 :: ======================================================
 echo [1/5] Checking for existing server instances...
 
-:: Check if port 80 is in use
-netstat -ano | findstr ":80 " | findstr "LISTENING" >nul 2>&1
+:: Check if port 3100 is in use
+netstat -ano | findstr ":3100 " | findstr "LISTENING" >nul 2>&1
 if %errorlevel% equ 0 (
-    echo   ^> Found existing server on port 80
+    echo   ^> Found existing server on port 3100
     echo   ^> Gracefully terminating...
     
-    :: Get PID of process using port 80
-    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":80 " ^| findstr "LISTENING"') do (
+    :: Get PID of process using port 3100
+    for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3100 " ^| findstr "LISTENING"') do (
         set PID=%%a
         echo   ^> Stopping process !PID!...
         taskkill /PID !PID! /F >nul 2>&1
@@ -120,10 +120,10 @@ start /b "" node index.js >nul 2>&1
 echo   ^> Waiting for server to initialize...
 timeout /t 3 /nobreak >nul
 
-:: Check if port 80 is now listening
+:: Check if port 3100 is now listening
 set SERVER_STARTED=0
 for /L %%i in (1,1,10) do (
-    netstat -ano | findstr ":80 " | findstr "LISTENING" >nul 2>&1
+    netstat -ano | findstr ":3100 " | findstr "LISTENING" >nul 2>&1
     if !errorlevel! equ 0 (
         set SERVER_STARTED=1
         goto :server_ready
@@ -133,9 +133,9 @@ for /L %%i in (1,1,10) do (
 
 :server_ready
 if %SERVER_STARTED% equ 1 (
-    echo   ^> Server started successfully on port 80
+    echo   ^> Server started successfully on port 3100
 ) else (
-    echo   ^> ERROR: Server failed to start on port 80
+    echo   ^> ERROR: Server failed to start on port 3100
     echo   ^> Please check server logs for details
     echo   ^> You may need to run as Administrator
     pause
@@ -153,14 +153,14 @@ echo [5/5] Launching PharmCare Pro...
 timeout /t 2 /nobreak >nul
 
 :: Open browser
-start http://pharmcarepro/?startup=1
+start http://localhost:3100/?startup=1
 
 echo.
 echo ========================================
 echo   SYSTEM READY!
 echo ========================================
 echo.
-echo   Access URL:  http://pharmcarepro/
+echo   Access URL:  http://localhost:3100/
 echo   Admin Login: admin@pharmcarepro.com
 echo   Password:    Admin@123!
 echo.
