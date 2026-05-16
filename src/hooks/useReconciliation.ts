@@ -64,7 +64,8 @@ export function useReconciliation(filters?: ReconciliationFilters) {
             // Note: Since we use 'shifts' table which maps to 'staff_shifts' conceptually
             return data.map((shift: any) => ({
                 ...shift,
-                staff_name: shift.staff_name || 'Staff Member', // Real name would come from JOIN eventually
+                staff_name: shift.staff_name || 'Staff Member',
+                staff_email: shift.staff_email || 'No Email',
                 expected_cash_total: Number(shift.expected_cash) || 0,
                 actual_cash_counted: Number(shift.actual_cash) || 0,
                 expected_pos_total: 0, // Placeholder

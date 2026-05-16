@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { SessionTimeoutWarning } from "./components/auth/SessionTimeoutWarning";
 import { OfflineProvider } from "./contexts/OfflineContext";
+import { ShiftProvider } from "./contexts/ShiftContext";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Login from "./pages/Login";
@@ -65,187 +66,189 @@ const App = ({ queryClient, persister }: AppProps) => (
   >
     <OfflineProvider>
       <AuthProvider>
-        <SessionTimeoutWarning />
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <OfflineBanner />
-          <PWAInstallPrompt />
-          <NotificationPermissionBanner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <DashboardLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="/" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
+        <ShiftProvider>
+          <SessionTimeoutWarning />
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <OfflineBanner />
+            <PWAInstallPrompt />
+            <NotificationPermissionBanner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<Login />} />
                 <Route
-                  path="/inventory"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "inventory" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><Inventory /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                {/* All roles can access sales now */}
-                <Route
-                  path="/sales"
                   element={
                     <ProtectedRoute>
-                      <Suspense fallback={<PageLoader />}><Sales /></Suspense>
+                      <DashboardLayout />
                     </ProtectedRoute>
                   }
-                />
-                <Route
-                  path="/sales/new"
-                  element={
-                    <ProtectedRoute>
-                      <Suspense fallback={<PageLoader />}><NewSale /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/receipts"
-                  element={
-                    <ProtectedRoute>
-                      <Suspense fallback={<PageLoader />}><Receipts /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/print-history"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "reports" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><PrintHistory /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/users"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "users" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><Users /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <ProtectedRoute>
-                      <Suspense fallback={<PageLoader />}><Settings /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/reports"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "reports" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><Reports /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/refunds"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "reports" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><RefundApproval /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/suppliers"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "inventory" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><Suppliers /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/analytics"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "reports" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><Analytics /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/credit-management"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "credit" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><CreditManagement /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/shifts"
-                  element={
-                    <ProtectedRoute>
-                      <Suspense fallback={<PageLoader />}><ShiftManagement /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/reconciliation"
-                  element={
-                    <ProtectedRoute
-                      requiredPermission={{ action: "read", resource: "reports" }}
-                    >
-                      <Suspense fallback={<PageLoader />}><CashReconciliation /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/expenses"
-                  element={
-                    <ProtectedRoute>
-                      <Suspense fallback={<PageLoader />}><Expenses /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/technical-guide"
-                  element={
-                    <ProtectedRoute>
-                      <Suspense fallback={<PageLoader />}><TechnicalGuide /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/training"
-                  element={
-                    <ProtectedRoute>
-                      <Suspense fallback={<PageLoader />}><Training /></Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+                >
+                  <Route path="/" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
+                  <Route
+                    path="/inventory"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "inventory" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><Inventory /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* All roles can access sales now */}
+                  <Route
+                    path="/sales"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoader />}><Sales /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/sales/new"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoader />}><NewSale /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/receipts"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoader />}><Receipts /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/print-history"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "reports" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><PrintHistory /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/users"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "users" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><Users /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoader />}><Settings /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/reports"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "reports" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><Reports /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/refunds"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "reports" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><RefundApproval /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/suppliers"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "inventory" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><Suppliers /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/analytics"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "reports" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><Analytics /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/credit-management"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "credit" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><CreditManagement /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/shifts"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoader />}><ShiftManagement /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/reconciliation"
+                    element={
+                      <ProtectedRoute
+                        requiredPermission={{ action: "read", resource: "reports" }}
+                      >
+                        <Suspense fallback={<PageLoader />}><CashReconciliation /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/expenses"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoader />}><Expenses /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/technical-guide"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoader />}><TechnicalGuide /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/training"
+                    element={
+                      <ProtectedRoute>
+                        <Suspense fallback={<PageLoader />}><Training /></Suspense>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </ShiftProvider>
       </AuthProvider>
     </OfflineProvider>
-  </PersistQueryClientProvider>
+  </PersistQueryClientProvider >
 );
 
 export default App;

@@ -70,7 +70,7 @@ const ShiftManagement = () => {
     const activeCount = activeStaffShifts.length;
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
+        <div className="space-y-6 max-w-[1600px] mx-auto transition-opacity duration-300">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-gradient-to-br from-blue-500/10 to-transparent border-blue-500/20 shadow-sm">
@@ -160,7 +160,7 @@ const ShiftManagement = () => {
                                                 <Button
                                                     size="sm"
                                                     variant="destructive"
-                                                    className="h-8 shadow-sm"
+                                                    className="h-8 shadow-sm transition-colors"
                                                     onClick={() => setClosingShift(s)}
                                                 >
                                                     <Power className="h-4 w-4 mr-1" /> End Shift
@@ -252,8 +252,8 @@ const ShiftManagement = () => {
                             Administrative action to finalize this staff member's duty session and reconcile cash drawer.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="bg-muted p-4 rounded-lg space-y-2">
+                    <div className="grid gap-6 py-4 min-h-[300px]">
+                        <div className="bg-muted p-4 rounded-lg space-y-2 border-2 border-dashed h-[100px] flex flex-col justify-center">
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Staff Member:</span>
                                 <span className="font-bold">User {closingShift?.user_id.slice(0, 8)}</span>

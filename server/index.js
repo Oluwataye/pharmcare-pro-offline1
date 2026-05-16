@@ -69,7 +69,7 @@ const ALLOWED_TABLES = [
     'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
     'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements',
     'system_configs', 'database_backups', 'shifts', 'cash_reconciliations', 'expenses',
-    'print_analytics'
+    'print_analytics', 'customers', 'customer_transactions'
 ];
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -516,6 +516,54 @@ const handleSaleCreation = async (body, connection) => {
         `INSERT INTO sales_items (id, sale_id, inventory_id, product_name, quantity, unit_price, total, is_wholesale, cost_price) VALUES ?`,
         [itemValues]
     );
+
+    // --- DEBTOR LOGIC: Handle "Transfer (Pay Later)" ---
+    const payLaterPayment = payments.find(p => p.mode === 'transfer');
+    if (payLaterPayment && payLaterPayment.amount > 0) {
+        console.log(`[Server] Detected Pay Later payment of ₦${payLaterPayment.amount}. Updating debtor records...`);
+
+        // 1. Find or Create Customer
+        let customerId;
+        let currentBalance = 0;
+
+        const [existingCustomers] = await connection.query(
+            'SELECT id, credit_balance FROM customers WHERE (phone = ? AND phone IS NOT NULL) OR (name = ? AND name != "Walk-in Customer") LIMIT 1',
+            [customerPhone || null, customerName || null]
+        );
+
+        if (existingCustomers.length > 0) {
+            customerId = existingCustomers[0].id;
+            currentBalance = Number(existingCustomers[0].credit_balance) || 0;
+        } else {
+            customerId = generateUUID();
+            await connection.query(
+                'INSERT INTO customers (id, name, phone, credit_balance) VALUES (?, ?, ?, ?)',
+                [customerId, customerName || 'Unknown Debtor', customerPhone || null, 0]
+            );
+        }
+
+        const newBalance = currentBalance + Number(payLaterPayment.amount);
+
+        // 2. Update Customer Balance
+        await connection.query(
+            'UPDATE customers SET credit_balance = ?, updated_at = NOW() WHERE id = ?',
+            [newBalance, customerId]
+        );
+
+        // 3. Record Transaction
+        await connection.query(
+            `INSERT INTO customer_transactions (
+                id, customer_id, type, amount, description, 
+                balance_before, balance_after, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                generateUUID(), customerId, 'DEBIT', payLaterPayment.amount,
+                `Sale ${finalTransactionId}`, currentBalance, newBalance, finalUserId
+            ]
+        );
+
+        console.log(`[Server] Debtor updated: ${customerName} (New Balance: ₦${newBalance})`);
+    }
 
     // 4. Receipt Data
     const receiptId = generateUUID();
@@ -1011,13 +1059,16 @@ app.get('/api/:table', requireAuth, async (req, res) => {
         }
 
         let targetTable = table;
-        let sql = `SELECT * FROM ${targetTable}`;
+        let sql = `SELECT t.* FROM ${targetTable} t`;
+        if (table === 'shifts') {
+            sql = `SELECT t.*, u.email as staff_email FROM shifts t LEFT JOIN users u ON t.user_id = u.id`;
+        }
         let params = [];
 
         // Expiry Filtering for Inventory
         const showExpired = req.query.include_expired === 'true';
         if (table === 'inventory' && !showExpired) {
-            sql += ' WHERE (expiry_date > CURDATE() OR expiry_date IS NULL)';
+            sql += ' WHERE (t.expiry_date > CURDATE() OR t.expiry_date IS NULL)';
         }
 
         const reservedParams = ['order', 'limit', 'select', 'offset', 'include_expired'];
@@ -1027,7 +1078,7 @@ app.get('/api/:table', requireAuth, async (req, res) => {
         if (filters.length > 0) {
             sql += (sql.includes('WHERE') ? ' AND ' : ' WHERE ') + filters.map(([k, v]) => {
                 const safeCol = k.replace(/[^a-z0-9_]/gi, '');
-                let col = (targetTable === 'users' && safeCol === 'user_id' ? 'id' : safeCol);
+                let col = (targetTable === 'users' && safeCol === 'user_id' ? 't.id' : `t.${safeCol}`);
                 const parts = String(v).split('.');
                 const op = parts[0];
                 let val = parts.slice(1).join('.');
@@ -1064,9 +1115,9 @@ app.get('/api/:table', requireAuth, async (req, res) => {
             const [orderCol, dir] = req.query.order.split('.');
             // Clean column name (prevent SQL injection)
             const safeOrderCol = orderCol.replace(/[^a-z0-9_]/gi, '');
-            sql += ` ORDER BY ${safeOrderCol} ${dir === 'desc' ? 'DESC' : 'ASC'}`;
+            sql += ` ORDER BY t.${safeOrderCol} ${dir === 'desc' ? 'DESC' : 'ASC'}`;
         } else if (table === 'inventory') {
-            sql += ` ORDER BY name ASC`;
+            sql += ` ORDER BY t.name ASC`;
         }
 
         if (req.query.limit) {
@@ -1435,13 +1486,20 @@ app.post('/api/:table', requireAuth, async (req, res) => {
         console.log(`[Server] POST /api/${table} SUCCESS: ${data.id}`);
 
         // Audit logging for transaction-related tables
-        if (['inventory', 'refunds'].includes(table)) {
+        if (['inventory', 'refunds', 'sales'].includes(table)) {
             const connection = await pool.getConnection();
             try {
-                const eventType = table === 'inventory' ? 'INVENTORY_CREATED' : 'REFUND_INITIATED';
-                const action = table === 'inventory'
-                    ? `Created inventory item: ${data.name || 'Unknown'}`
-                    : `Initiated refund request`;
+                let eventType, action;
+                if (table === 'inventory') {
+                    eventType = 'INVENTORY_CREATED';
+                    action = `Created inventory item: ${data.name || 'Unknown'}`;
+                } else if (table === 'refunds') {
+                    eventType = 'REFUND_INITIATED';
+                    action = `Initiated refund request`;
+                } else if (table === 'sales') {
+                    eventType = 'SALE_CREATED';
+                    action = `Created sale: ${data.transaction_id || data.id}`;
+                }
 
                 // Identity Priority: explicit data > middleware > system
                 const finalUserId = data.user_id || (req.user ? req.user.id : 'system');
@@ -1605,6 +1663,18 @@ app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
                         ]
                     );
                     logToFile(`STOCK ADJUSTMENT: ${prodRows[0].name} ${oldQty} -> ${newQty} (diff: ${diff})`);
+
+                    // Explicit Audit Log for Manual Adjustment
+                    await logAuditEvent(connection, {
+                        userId: req.user.id,
+                        userEmail: req.user.email,
+                        userRole: req.user.role,
+                        eventType: 'INVENTORY_ADJUSTED',
+                        action: `Manually adjusted stock for ${prodRows[0].name}: ${oldQty} -> ${newQty} (Change: ${diff > 0 ? '+' : ''}${diff})`,
+                        resourceType: 'inventory',
+                        resourceId: targetId,
+                        ipAddress: req.ip
+                    });
                 }
             }
         }
@@ -1613,7 +1683,7 @@ app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
         logToFile(`[Server] PATCH /api/${table} SUCCESS: ${targetId}`);
 
         // Audit logging (post-commit)
-        if (['inventory', 'refunds'].includes(table)) {
+        if (['inventory', 'refunds', 'sales'].includes(table)) {
             const auditConn = await pool.getConnection();
             try {
                 let eventType, action;
@@ -1626,6 +1696,9 @@ app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
                 } else if (table === 'refunds') {
                     eventType = 'REFUND_UPDATED';
                     action = `Updated refund ${targetId}`;
+                } else if (table === 'sales') {
+                    eventType = 'SALE_UPDATED';
+                    action = `Updated sale ${targetId}`;
                 }
 
                 if (eventType) {

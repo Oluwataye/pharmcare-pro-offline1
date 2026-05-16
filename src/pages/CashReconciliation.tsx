@@ -152,8 +152,8 @@ const CashReconciliation = () => {
                                         <TableCell>
                                             {format(new Date(shift.created_at), 'dd MMM yyyy, HH:mm')}
                                         </TableCell>
-                                        <TableCell>
-                                            User ID: {shift.user_id.slice(0, 8)}
+                                        <TableCell className="font-medium">
+                                            {shift.staff_email}
                                         </TableCell>
                                         <TableCell className="text-right font-mono text-sm">
                                             ₦{(shift.expected_cash_total || 0).toLocaleString()}
