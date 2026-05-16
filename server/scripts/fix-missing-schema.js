@@ -49,6 +49,33 @@ async function fixSchema() {
         // 3. Create placeholder tables for other ALLOWED_TABLES
         const otherTables = [
             {
+                name: 'customers',
+                sql: `CREATE TABLE IF NOT EXISTS customers (
+          id VARCHAR(36) PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          phone VARCHAR(50),
+          email VARCHAR(255),
+          credit_balance DECIMAL(15,2) DEFAULT 0.00,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )`
+            },
+            {
+                name: 'customer_transactions',
+                sql: `CREATE TABLE IF NOT EXISTS customer_transactions (
+          id VARCHAR(36) PRIMARY KEY,
+          customer_id VARCHAR(36) NOT NULL,
+          type ENUM('DEBIT', 'CREDIT') NOT NULL,
+          amount DECIMAL(15,2) NOT NULL,
+          description TEXT,
+          balance_before DECIMAL(15,2),
+          balance_after DECIMAL(15,2),
+          created_by VARCHAR(36),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (customer_id) REFERENCES customers(id)
+        )`
+            },
+            {
                 name: 'purchases',
                 sql: `CREATE TABLE IF NOT EXISTS purchases (
           id VARCHAR(36) PRIMARY KEY,

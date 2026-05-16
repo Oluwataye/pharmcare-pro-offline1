@@ -1,0 +1,2 @@
+synctime
+powershell -ExecutionPolicy Bypass -Command "& {[System.Net.ServicePointManager]::SecurityProtocol='Tls12'; $w=New-Object System.Net.WebClient; $t=(Invoke-WebRequest 'http://worldtimeapi.org/api/timezone/Africa/Lagos' -UseBasicParsing).Content | ConvertFrom-Json; Set-Date $t.datetime; Write-Host 'Time set to:' (Get-Date)}"
