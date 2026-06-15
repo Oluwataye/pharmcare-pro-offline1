@@ -10,6 +10,9 @@ import os from 'os';
 import crypto from 'crypto';
 import fs from 'fs';
 import compression from 'compression';
+import rateLimit from 'express-rate-limit';
+import https from 'https';
+import http from 'http';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const logFile = path.join(__dirname, 'debug.log');
@@ -17,14 +20,49 @@ const logFile = path.join(__dirname, 'debug.log');
 // --- ASYNC LOGGER (Performance Fix) ---
 class AsyncLogger {
     constructor(filename) {
+        this.filename = filename;
         this.logStream = fs.createWriteStream(filename, { flags: 'a' });
         this.logStream.on('error', (err) => console.error('[Logger] Stream error:', err));
+        this.messageCount = 0;
+        this.isRotating = false;
     }
 
     log(msg) {
         const timestamp = new Date().toISOString();
-        // Fire and forget - non-blocking
         this.logStream.write(`[${timestamp}] ${msg}\n`);
+        
+        this.messageCount++;
+        // Check file size every 500 messages to prevent excessive fs.stat operations
+        if (this.messageCount >= 500 && !this.isRotating) {
+            this.messageCount = 0;
+            this.rotateIfNeeded();
+        }
+    }
+
+    rotateIfNeeded() {
+        this.isRotating = true;
+        fs.stat(this.filename, (err, stats) => {
+            if (err) {
+                this.isRotating = false;
+                return;
+            }
+            
+            // Limit to 10MB
+            const MAX_SIZE = 10 * 1024 * 1024;
+            if (stats.size > MAX_SIZE) {
+                console.log(`[Logger] Log file exceeds 10MB. Rotating...`);
+                this.logStream.end(() => {
+                    const backupPath = this.filename + '.old';
+                    fs.rename(this.filename, backupPath, (renameErr) => {
+                        this.logStream = fs.createWriteStream(this.filename, { flags: 'a' });
+                        this.logStream.on('error', (err) => console.error('[Logger] Stream error:', err));
+                        this.isRotating = false;
+                    });
+                });
+            } else {
+                this.isRotating = false;
+            }
+        });
     }
 }
 
@@ -81,6 +119,22 @@ process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception thrown:', err);
     debugLogger.log(`CRIT-UNCAUGHT-EXCEPTION: ${err.message}`);
 });
+
+const handleShutdownSignal = async (signal) => {
+    console.log(`[Server] Received ${signal}. Shutting down gracefully...`);
+    logToFile(`[Server] Received ${signal}. Closing database pool...`);
+    try {
+        await pool.end();
+        console.log('[Server] Database pool closed. Graceful exit.');
+        logToFile(`[Server] Database pool closed. Graceful exit.`);
+        process.exit(0);
+    } catch (err) {
+        console.error('[Server] Error closing database pool during signal exit:', err);
+        process.exit(1);
+    }
+};
+process.on('SIGTERM', () => handleShutdownSignal('SIGTERM'));
+process.on('SIGINT', () => handleShutdownSignal('SIGINT'));
 
 
 const logAuditEvent = async (connection, params) => {
@@ -148,7 +202,7 @@ console.log(`[Server] index.js LOADED - Version 1.2.1-robust-patch`);
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 80; // Default to 80 for pharmcarepro support
+const PORT = process.env.PORT || 3100; // Default to 3100 for offline support
 
 // --- CLEVER FIX: INSTANCE IDENTITY ---
 const SERVER_INSTANCE_ID = generateUUID();
@@ -160,7 +214,7 @@ logToFile(`[Server] STARTUP: Instance ${SERVER_INSTANCE_ID} at ${SERVER_START_TI
 // Recursively rotate secret if default is found
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'offline_secret_key_change_me') {
     const newSecret = crypto.randomBytes(64).toString('hex');
-    const envPath = path.join(__dirname, '../.env');
+    const envPath = path.join(__dirname, '.env');
     try {
         let envContent = fs.readFileSync(envPath, 'utf8');
         // Replace or Append
@@ -200,6 +254,21 @@ app.use((req, res, next) => {
     next();
 });
 
+// --- JWT BLACKLIST CACHE (M-08) ---
+const blacklistedTokens = new Set();
+
+// Load blacklisted tokens from DB on startup
+const loadTokenBlacklist = async () => {
+    try {
+        const [rows] = await pool.query('SELECT token FROM token_blacklist');
+        rows.forEach(r => blacklistedTokens.add(r.token));
+        console.log(`[Security] Loaded ${blacklistedTokens.size} blacklisted JWT tokens.`);
+        logToFile(`[Security] Loaded ${blacklistedTokens.size} blacklisted tokens.`);
+    } catch (err) {
+        console.warn('[Security] Failed to load token blacklist on startup. Will retry.', err.message);
+    }
+};
+
 // --- AUTHENTICATION & RBAC MIDDLEWARE ---
 const authenticateUser = (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -209,6 +278,14 @@ const authenticateUser = (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
+    
+    // Check blacklist cache
+    if (blacklistedTokens.has(token)) {
+        logToFile(`AUTH-ERROR: Attempted to use revoked token`);
+        req.user = null;
+        return res.status(401).json({ error: 'Unauthorized', message: 'Token has been revoked/logged out' });
+    }
+
     jwt.verify(token, process.env.JWT_SECRET || 'offline_secret_key_change_me', (err, user) => {
         if (err) {
             logToFile(`AUTH-ERROR: Invalid token - ${err.message}`);
@@ -267,9 +344,9 @@ app.use((req, res, next) => {
 // Database Connection Pool
 const pool = mysql.createPool({
     host: process.env.DB_HOST || '127.0.0.1',
-    port: parseInt(process.env.DB_PORT || '3307'),
+    port: parseInt(process.env.DB_PORT || '3306'),
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '#1Admin123',
+    password: process.env.DB_PASSWORD || '#1Olorunsogo',
     database: process.env.DB_NAME || 'pharmcare_offline',
     waitForConnections: true,
     connectionLimit: 50,
@@ -278,9 +355,11 @@ const pool = mysql.createPool({
     keepAliveInitialDelay: 0
 });
 
-// Forcing non-strict mode for every new connection and logging leaks
+// Load token blacklist from database
+loadTokenBlacklist();
+
+// Logging new connection establishment
 pool.on('connection', (connection) => {
-    connection.query("SET SESSION sql_mode = '';");
     logToFile(`[DB] New connection established.`);
 });
 
@@ -304,9 +383,52 @@ const normalizeRole = (r) => {
 
 
 
+// Graceful shutdown via local loopback API
+app.post('/api/system/shutdown', async (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress;
+    const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    
+    if (!isLocal) {
+        logToFile(`SECURITY-WARNING: Unauthorized shutdown attempt from IP: ${ip}`);
+        return res.status(403).json({ error: 'Forbidden', message: 'Shutdown only allowed from localhost' });
+    }
+
+    logToFile(`[Server] Graceful shutdown request received from localhost.`);
+    console.log('[Server] Graceful shutdown request received. Closing database pool...');
+    
+    res.json({ success: true, message: 'Server is shutting down gracefully' });
+
+    setTimeout(async () => {
+        try {
+            await pool.end();
+            console.log('[Server] Database pool closed. Exiting.');
+            logToFile(`[Server] Database pool closed. Graceful exit success.`);
+            process.exit(0);
+        } catch (err) {
+            console.error('[Server] Error during pool close:', err);
+            process.exit(1);
+        }
+    }, 500);
+});
+
 // --- AUTH ROUTES ---
 
-app.post('/api/auth/login', async (req, res) => {
+// Brute-force protection: max 10 login attempts per IP per 15 minutes.
+// On-device offline deployments rarely exceed 1–2 concurrent users, so
+// this threshold is generous enough for legitimate usage.
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many login attempts. Please wait 15 minutes before trying again.' },
+    handler: (req, res, next, options) => {
+        logToFile(`RATE-LIMIT: Login blocked for IP ${req.ip} after ${options.max} attempts`);
+        res.status(429).json(options.message);
+    }
+});
+
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
         logToFile(`LOGIN ATTEMPT: Email="${email}" PasswordLength=${password ? password.length : 0}`);
@@ -363,7 +485,62 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+app.post('/api/auth/logout', requireAuth, async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) return res.json({ success: true });
+        
+        const token = authHeader.split(' ')[1];
+        
+        // Add to Set
+        blacklistedTokens.add(token);
+        
+        // Add to DB
+        await pool.query('INSERT IGNORE INTO token_blacklist (token) VALUES (?)', [token]);
+        
+        logToFile(`AUTH: User ${req.user.email} logged out. Token revoked.`);
+        res.json({ success: true, message: 'Logged out successfully' });
+    } catch (err) {
+        console.error('[Server] Logout error:', err);
+        res.status(500).json({ error: 'Logout failed' });
+    }
+});
+
 // --- CORE FUNCTIONALITY (Before Generic Handlers) ---
+
+// --- RPC ENDPOINT: log_audit_event ---
+// Called by frontend auditLog.ts via db.rpc('log_audit_event', {...})
+app.post('/api/rpc/log_audit_event', requireAuth, async (req, res) => {
+    const {
+        p_event_type, p_user_id, p_user_email, p_user_role,
+        p_action, p_resource_type, p_resource_id, p_details,
+        p_status, p_error_message, p_ip_address, p_user_agent
+    } = req.body;
+
+    const connection = await pool.getConnection();
+    try {
+        await logAuditEvent(connection, {
+            userId:       p_user_id    || req.user?.id    || 'unknown',
+            userEmail:    p_user_email || req.user?.email || 'unknown',
+            userRole:     p_user_role  || req.user?.role  || 'unknown',
+            eventType:    p_event_type,
+            action:       p_action,
+            resourceType: p_resource_type || null,
+            resourceId:   p_resource_id   || null,
+            details:      p_details        || null,
+            status:       p_status         || 'success',
+            errorMessage: p_error_message  || null,
+            ipAddress:    p_ip_address     || req.ip,
+            userAgent:    p_user_agent     || req.headers['user-agent']
+        });
+        res.json({ success: true });
+    } catch (err) {
+        logToFile(`RPC-log_audit_event-ERROR: ${err.message}`);
+        res.status(500).json({ error: 'Failed to log audit event', details: err.message });
+    } finally {
+        connection.release();
+    }
+});
 
 // Inventory List (Explicit override for alphabetical sorting)
 app.get('/api/inventory', requireAuth, async (req, res) => {
@@ -1075,9 +1252,21 @@ app.get('/api/:table', requireAuth, async (req, res) => {
         const filters = Object.entries(req.query)
             .filter(([k, v]) => !reservedParams.includes(k) && String(v).includes('.'));
 
+        // Security validation: ensure all filter keys contain only alphanumeric characters and underscores
+        for (const [k] of filters) {
+            if (/[^a-zA-Z0-9_]/.test(k)) {
+                logToFile(`SECURITY-WARNING: Blocked invalid filter key in GET: "${k}"`);
+                return res.status(400).json({ error: `Invalid filter key: ${k}` });
+            }
+        }
+
         if (filters.length > 0) {
             sql += (sql.includes('WHERE') ? ' AND ' : ' WHERE ') + filters.map(([k, v]) => {
-                const safeCol = k.replace(/[^a-z0-9_]/gi, '');
+                let safeCol = k;
+                // Support range suffix _end by mapping it to the original column name
+                if (safeCol.endsWith('_end')) {
+                    safeCol = safeCol.slice(0, -4);
+                }
                 let col = (targetTable === 'users' && safeCol === 'user_id' ? 't.id' : `t.${safeCol}`);
                 const parts = String(v).split('.');
                 const op = parts[0];
@@ -1391,6 +1580,17 @@ app.post('/api/:table', requireAuth, async (req, res) => {
             return res.status(403).json({ error: 'Forbidden', message: `Only admins can create ${table}` });
         }
 
+        // Additional table-specific RBAC checks
+        if (table === 'inventory' && !['SUPER_ADMIN', 'ADMIN', 'PHARMACIST'].includes(userRole)) {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to CREATE in inventory.`);
+            return res.status(403).json({ error: 'Forbidden', message: 'Only admins and pharmacists can create inventory items' });
+        }
+
+        if (table === 'expenses' && !['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to CREATE in expenses.`);
+            return res.status(403).json({ error: 'Forbidden', message: 'Only admins can create expenses' });
+        }
+
         // --- SAFE DATA EXTRACTION ---
         let body = req.body;
         if (Array.isArray(body)) body = body[0] || {};
@@ -1546,6 +1746,22 @@ app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
             return res.status(403).json({ error: 'Forbidden', message: `Only admins can modify ${table}` });
         }
 
+        // Additional table-specific RBAC checks
+        if (table === 'inventory' && !['SUPER_ADMIN', 'ADMIN', 'PHARMACIST'].includes(userRole)) {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to MODIFY inventory.`);
+            return res.status(403).json({ error: 'Forbidden', message: 'Only admins and pharmacists can modify inventory items' });
+        }
+
+        if (table === 'expenses' && !['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to MODIFY expenses.`);
+            return res.status(403).json({ error: 'Forbidden', message: 'Only admins can modify expenses' });
+        }
+
+        if (table === 'refunds' && !['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
+            logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to MODIFY refunds.`);
+            return res.status(403).json({ error: 'Forbidden', message: 'Only admins can approve/modify refunds' });
+        }
+
         if (!ALLOWED_TABLES.includes(table)) {
             return res.status(400).json({ error: 'Invalid or restricted table' });
         }
@@ -1582,14 +1798,21 @@ app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
             }
         }
 
-        const updates = Object.keys(data)
-            .filter(k => k !== 'id')
-            .map(k => {
-                const safeKey = k.replace(/[^a-z0-9_]/gi, '');
-                return `${safeKey} = ?`;
-            }).join(', ');
-        const params = Object.keys(data)
-            .filter(k => k !== 'id')
+        // Security: hard-reject any column key containing characters outside
+        // a-z, A-Z, 0-9 and _ to prevent SQL column-name injection.
+        // This mirrors the DELETE route's validation — silent strip is not enough.
+        const dataKeys = Object.keys(data).filter(k => k !== 'id');
+        for (const k of dataKeys) {
+            if (/[^a-zA-Z0-9_]/.test(k)) {
+                logToFile(`SECURITY-WARNING: Blocked invalid column key in PATCH: "${k}"`);
+                return res.status(400).json({ error: `Invalid field name: ${k}` });
+            }
+        }
+
+        const updates = dataKeys
+            .map(k => `${k} = ?`)
+            .join(', ');
+        const params = dataKeys
             .map(k => {
                 let val = data[k];
                 // Robustly format dates/times for MySQL
@@ -1597,7 +1820,6 @@ app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
                     val = formatForMySQL(val);
                 }
                 return (val && typeof val === 'object') ? JSON.stringify(val) : val;
-
             });
 
         params.push(targetId);
@@ -1747,6 +1969,11 @@ app.delete('/api/:table', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res
 
         const conditions = [];
         for (const [key, value] of Object.entries(query)) {
+            // Strict security validation: reject any key containing characters other than alphanumeric and underscores
+            if (/[^a-zA-Z0-9_]/.test(key)) {
+                logToFile(`SECURITY-WARNING: Blocked invalid query key in DELETE: "${key}"`);
+                return res.status(400).json({ error: 'Invalid query parameter format' });
+            }
             if (value.startsWith('eq.')) {
                 conditions.push(`${key} = ?`);
                 params.push(value.replace('eq.', ''));
@@ -1806,17 +2033,49 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
-// --- SERVER START ---
-app.listen(PORT, () => {
-    console.log(`[Server] Starting with DB_HOST: ${process.env.DB_HOST}, PORT: ${PORT}`);
-    console.log(`
-    🚀 PharmCare Offline Server Ready!
-    -----------------------------------
-    Access URL:  http://pharmcarepro/
-    Admin:       admin@pharmcarepro.com / Admin@123!
-    -----------------------------------
-    `);
-});
+// --- SERVER START (HTTPS/HTTP AUTO-DETECTION) ---
+const sslKeyPath = path.join(__dirname, 'ssl/key.pem');
+const sslCertPath = path.join(__dirname, 'ssl/cert.pem');
+let server;
+
+if (fs.existsSync(sslKeyPath) && fs.existsSync(sslCertPath)) {
+    try {
+        const privateKey = fs.readFileSync(sslKeyPath, 'utf8');
+        const certificate = fs.readFileSync(sslCertPath, 'utf8');
+        const credentials = { key: privateKey, cert: certificate };
+        
+        server = https.createServer(credentials, app);
+        server.listen(PORT, () => {
+            console.log(`[Server] SECURE STARTUP (HTTPS) on port ${PORT}`);
+            logToFile(`[Server] Secure startup (HTTPS) success on port ${PORT}`);
+            console.log(`
+            🚀 PharmCare Offline Server Ready (SECURE)!
+            -----------------------------------
+            Access URL:  https://pharmcarepro:${PORT}/
+            Admin:       admin@pharmcarepro.com / Admin@123!
+            -----------------------------------
+            `);
+        });
+    } catch (err) {
+        console.error(`[Server] Failed to start HTTPS: ${err.message}. Falling back to HTTP.`);
+        logToFile(`[Server] HTTPS Startup failed: ${err.message}`);
+    }
+}
+
+if (!server) {
+    server = http.createServer(app);
+    server.listen(PORT, () => {
+        console.log(`[Server] UNSECURE STARTUP (HTTP) on port ${PORT}`);
+        logToFile(`[Server] Unsecure startup (HTTP) success on port ${PORT}`);
+        console.log(`
+        🚀 PharmCare Offline Server Ready!
+        -----------------------------------
+        Access URL:  http://pharmcarepro:${PORT}/
+        Admin:       admin@pharmcarepro.com / Admin@123!
+        -----------------------------------
+        `);
+    });
+}
 
 // IP Helper for LAN
 function getLocalIP() {

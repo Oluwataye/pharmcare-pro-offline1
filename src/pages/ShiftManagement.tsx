@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -29,9 +30,7 @@ const ShiftManagement = () => {
     const fetchShiftHistory = useCallback(async () => {
         setIsLoadingHistory(true);
         try {
-            const response = await fetch('/api/shifts/history', {
-                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
-            });
+            const response = await apiFetch('/api/shifts/history');
             if (response.ok) {
                 const data = await response.json();
                 setShifts(data);

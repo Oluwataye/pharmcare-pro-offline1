@@ -50,8 +50,7 @@ async function initDB() {
     connection = await mysql.createConnection(dbConfig);
     console.log('Connected to MySQL...');
 
-    // Disable strict mode for compatibility
-    await connection.query("SET SESSION sql_mode = '';");
+    // Relying on default database strict mode for data integrity
 
     await connection.query('CREATE DATABASE IF NOT EXISTS pharmcare_offline');
     await connection.query('USE pharmcare_offline');
@@ -64,7 +63,7 @@ async function initDB() {
         password_hash VARCHAR(255) NOT NULL,
         first_name VARCHAR(100),
         last_name VARCHAR(100),
-        role ENUM('SUPER_ADMIN', 'ADMIN', 'PHARMACIST', 'CASHIER') DEFAULT 'CASHIER',
+        role ENUM('SUPER_ADMIN', 'ADMIN', 'PHARMACIST', 'CASHIER', 'DISPENSER') DEFAULT 'CASHIER',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );`,
@@ -82,7 +81,7 @@ async function initDB() {
       `CREATE TABLE IF NOT EXISTS user_roles (
         id VARCHAR(36) PRIMARY KEY,
         user_id VARCHAR(36),
-        role ENUM('SUPER_ADMIN', 'ADMIN', 'PHARMACIST', 'CASHIER') DEFAULT 'CASHIER',
+        role ENUM('SUPER_ADMIN', 'ADMIN', 'PHARMACIST', 'CASHIER', 'DISPENSER') DEFAULT 'CASHIER',
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );`,
@@ -127,7 +126,7 @@ async function initDB() {
         cashier_id VARCHAR(36),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
       );`,
 
       `CREATE TABLE IF NOT EXISTS sales_items (
@@ -289,6 +288,11 @@ async function initDB() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
+      );`,
+
+      `CREATE TABLE IF NOT EXISTS token_blacklist (
+        token VARCHAR(500) PRIMARY KEY,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );`
     ];
 

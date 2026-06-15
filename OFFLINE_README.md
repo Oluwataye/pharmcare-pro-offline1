@@ -34,7 +34,7 @@ Think of your main computer as the **"Big Brain"** and your other computers as *
 2. You will see some text that tells you the address. 
 
 ## 📛 Step 4: Use the Friendly Name
-To use the name **http://pharmcarepro/** instead of numbers:
+To use the name **http://pharmcarepro:3100/** instead of numbers:
 1. Open **Notepad** as Administrator.
 2. Open `C:\Windows\System32\drivers\etc\hosts`.
 3. At the bottom, add: `127.0.0.1  pharmcarepro`
@@ -44,20 +44,20 @@ To use the name **http://pharmcarepro/** instead of numbers:
 1. Make sure the other computers are on the same Wi-Fi.
 2. Update the **hosts** file on the other computer too, but use the Big Brain's IP:
    - Example: `169.254.140.26  pharmcarepro`
-3. Open Chrome and type: `http://pharmcarepro/` 🎉
+3. Open Chrome and type: `http://pharmcarepro:3100/` 🎉
 
 ---
 
 ## 🆘 Troubleshooting (The "Super Fix")
 
-If `http://pharmcarepro/` is not working, try these 3 things:
+If `http://pharmcarepro:3100/` is not working, try these 3 things:
 
 ### 1. The Firewall Fix (Very Important!) ⚔️
 Windows often blocks other computers for safety. You need to tell it "It's okay!":
 1. Open the **Start Menu** and type **"Windows Defender Firewall with Advanced Security"**.
 2. Click **Inbound Rules** on the left.
 3. Click **New Rule...** on the right.
-4. Choose **Port** -> **TCP** -> type **80** in "Specific local ports".
+4. Choose **Port** -> **TCP** -> type **3100** in "Specific local ports".
 5. Click **Allow the connection** and keep clicking "Next" until you give it a name like **"Pharmacy App"**.
 
 ### 2. Check your "Real" IP Number 🔢

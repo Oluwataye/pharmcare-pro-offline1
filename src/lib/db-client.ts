@@ -1,5 +1,6 @@
 // PharmCare Pro Offline Database Client
 // Redirects calls to local Express API
+import { apiFetch } from './api-client';
 
 const API_URL = `${window.location.origin}/api`;
 // STRICT OFFLINE MODE ENFORCED
@@ -143,13 +144,7 @@ class QueryBuilder {
     async then(resolve: (value: any) => void) {
         try {
             let endpoint = `${API_URL}/${this.table}`;
-            const token = sessionStorage.getItem('offline_token') || '';
-            let options: RequestInit = {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                }
-            };
+            let options: RequestInit = {};
 
             if (this.action === 'select') {
                 const params = new URLSearchParams();
@@ -163,7 +158,7 @@ class QueryBuilder {
                 if (params.toString()) endpoint += `?${params.toString()}`;
 
                 console.log(`[DB Client] Calling: GET ${endpoint}`);
-                const response = await fetch(endpoint, options);
+                const response = await apiFetch(endpoint, options);
                 if (!response.ok) {
                     const error = await response.json().catch(() => ({ message: 'Network request failed' }));
                     return resolve({ data: null, error });
@@ -198,7 +193,7 @@ class QueryBuilder {
                 }
 
                 console.log(`[DB Client] Calling: ${options.method} ${endpoint}`);
-                const response = await fetch(endpoint, options);
+                const response = await apiFetch(endpoint, options);
                 if (!response.ok) {
                     const error = await response.json().catch(() => ({ message: 'Save failed' }));
                     return resolve({ data: null, error });
@@ -234,27 +229,27 @@ export const db = {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Invalid username or password');
 
-                sessionStorage.setItem('offline_token', data.access_token);
-                sessionStorage.setItem('offline_user', JSON.stringify(data.user));
+                localStorage.setItem('offline_token', data.access_token);
+                localStorage.setItem('offline_user', JSON.stringify(data.user));
                 return { data: { user: data.user, session: { access_token: data.access_token } }, error: null };
             } catch (error: any) {
                 return { data: { user: null }, error: { message: error.message } };
             }
         },
         signOut: async () => {
-            sessionStorage.removeItem('offline_token');
-            sessionStorage.removeItem('offline_user');
+            localStorage.removeItem('offline_token');
+            localStorage.removeItem('offline_user');
             return { error: null };
         },
         getSession: async () => {
-            const token = sessionStorage.getItem('offline_token');
-            const userJson = sessionStorage.getItem('offline_user');
+            const token = localStorage.getItem('offline_token');
+            const userJson = localStorage.getItem('offline_user');
             if (!token) return { data: { session: null }, error: null };
             const user = userJson ? JSON.parse(userJson) : null;
             return { data: { session: { access_token: token, user } }, error: null };
         },
         getUser: async () => {
-            const userJson = sessionStorage.getItem('offline_user');
+            const userJson = localStorage.getItem('offline_user');
             if (!userJson) return { data: { user: null }, error: null };
             return { data: { user: JSON.parse(userJson) }, error: null };
         },
@@ -295,12 +290,8 @@ export const db = {
     functions: {
         invoke: async (name: string, options: any) => {
             try {
-                const res = await fetch(`${API_URL}/functions/${name}`, {
+                const res = await apiFetch(`${API_URL}/functions/${name}`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${sessionStorage.getItem('offline_token') || ''}`
-                    },
                     body: JSON.stringify(options.body)
                 });
                 const data = await res.json();
@@ -317,12 +308,8 @@ export const db = {
     },
     rpc: async (funcName: string, args: any) => {
         try {
-            const res = await fetch(`${API_URL}/rpc/${funcName}`, {
+            const res = await apiFetch(`${API_URL}/rpc/${funcName}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token') || ''}`
-                },
                 body: JSON.stringify(args)
             });
             const data = await res.json();

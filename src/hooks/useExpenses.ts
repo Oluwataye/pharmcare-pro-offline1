@@ -1,6 +1,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { apiFetch } from '@/lib/api-client';
 
 export interface Expense {
     id: string;
@@ -36,9 +37,7 @@ export const useExpenses = (filters?: ExpenseFilters) => {
             if (filters?.category && filters.category !== 'all') params.append('category', filters.category);
             if (filters?.searchTerm) params.append('searchTerm', filters.searchTerm);
 
-            const response = await fetch(`/api/expenses?${params.toString()}`, {
-                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
-            });
+            const response = await apiFetch(`/api/expenses?${params.toString()}`);
 
             if (!response.ok) throw new Error('Failed to fetch expenses');
             const data = await response.json();
@@ -53,12 +52,8 @@ export const useExpenses = (filters?: ExpenseFilters) => {
 
     const addExpenseMutation = useMutation({
         mutationFn: async (expense: NewExpense) => {
-            const response = await fetch('/api/expenses', {
+            const response = await apiFetch('/api/expenses', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}`
-                },
                 body: JSON.stringify(expense)
             });
 
@@ -76,9 +71,8 @@ export const useExpenses = (filters?: ExpenseFilters) => {
 
     const deleteExpenseMutation = useMutation({
         mutationFn: async (id: string) => {
-            const response = await fetch(`/api/expenses/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
+            const response = await apiFetch(`/api/expenses/${id}`, {
+                method: 'DELETE'
             });
 
             if (!response.ok) throw new Error('Failed to delete expense');

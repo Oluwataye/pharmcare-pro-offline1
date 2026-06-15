@@ -13,6 +13,8 @@ if (urlParams.get('startup') === '1') {
   console.log('[Startup] Detected startup flag. Clearing session and cache...');
   sessionStorage.clear();
   localStorage.removeItem('PHARMACARE_CACHE');
+  localStorage.removeItem('offline_token');
+  localStorage.removeItem('offline_user');
 
   // Clean URL without reloading
   const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;

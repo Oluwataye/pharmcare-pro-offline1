@@ -22,7 +22,7 @@ export const OfflineProvider = ({ children }: { children: ReactNode }) => {
   const [serverStatus, setServerStatus] = useState<'connected' | 'disconnected' | 'checking'>('connected');
   const { toast } = useToast();
 
-  const API_URL = `${window.location.protocol}//${window.location.hostname}:80/api/health`;
+  const API_URL = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '80'}/api/health`;
   const checkCount = useRef(0);
   const consecutiveFailures = useRef(0);
 

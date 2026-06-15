@@ -113,8 +113,8 @@ echo.
 :: ======================================================
 echo [4/5] Starting Application Server...
 
-:: Start server in background
-start /b "" node index.js >nul 2>&1
+:: Start server in background with auto-restart supervisor loop
+start /b "" cmd /c ":loop && node index.js && timeout /t 3 && goto loop" >nul 2>&1
 
 :: Wait and verify server started
 echo   ^> Waiting for server to initialize...
@@ -161,8 +161,7 @@ echo   SYSTEM READY!
 echo ========================================
 echo.
 echo   Access URL:  http://localhost:3100/
-echo   Admin Login: admin@pharmcarepro.com
-echo   Password:    Admin@123!
+echo   Please refer to setup documentation for default credentials.
 echo.
 echo   Keep this window open while using
 echo   PharmCare Pro. Close it to stop

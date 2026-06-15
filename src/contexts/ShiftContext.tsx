@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { apiFetch } from '@/lib/api-client';
 
 export interface StaffShift {
     id: string;
@@ -42,9 +43,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const fetchActiveShift = useCallback(async () => {
         if (!user) return;
         try {
-            const response = await fetch('/api/shifts/active', {
-                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
-            });
+            const response = await apiFetch('/api/shifts/active');
             if (response.ok) {
                 const data = await response.json();
                 setActiveShift(data);
@@ -58,9 +57,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
         if (!isAdmin) return;
         try {
-            const response = await fetch('/api/shifts?status=eq.open', {
-                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
-            });
+            const response = await apiFetch('/api/shifts?status=eq.open');
             if (response.ok) {
                 const data = await response.json();
                 setActiveStaffShifts(data);
@@ -86,12 +83,8 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const startShift = useCallback(async (openingBalance: number, notes?: string) => {
         try {
-            const response = await fetch('/api/shifts/open', {
+            const response = await apiFetch('/api/shifts/open', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}`
-                },
                 body: JSON.stringify({ opening_balance: openingBalance, notes })
             });
 
@@ -110,12 +103,8 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const endShift = useCallback(async (actualCash: number, notes?: string) => {
         if (!activeShift) return;
         try {
-            const response = await fetch(`/api/shifts/close/${activeShift.id}`, {
+            const response = await apiFetch(`/api/shifts/close/${activeShift.id}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}`
-                },
                 body: JSON.stringify({ actual_cash: actualCash, notes })
             });
 
@@ -134,12 +123,8 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const adminEndShift = useCallback(async (shiftId: string, actualCash: number, staffId: string, startTime: string, notes?: string) => {
         try {
-            const response = await fetch(`/api/shifts/close/${shiftId}`, {
+            const response = await apiFetch(`/api/shifts/close/${shiftId}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}`
-                },
                 body: JSON.stringify({ actual_cash: actualCash, notes: notes || "Administrative closure" })
             });
 
@@ -154,9 +139,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const fetchShiftTotals = useCallback(async (shiftId: string) => {
         try {
-            const response = await fetch(`/api/shifts/totals/${shiftId}`, {
-                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('offline_token')}` }
-            });
+            const response = await apiFetch(`/api/shifts/totals/${shiftId}`);
             if (response.ok) {
                 return await response.json();
             }

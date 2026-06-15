@@ -17,6 +17,7 @@ import { OfflineBanner } from "./components/layout/OfflineBanner";
 import { Spinner } from "./components/ui/spinner";
 import { PWAInstallPrompt } from "./components/pwa/PWAInstallPrompt";
 import { NotificationPermissionBanner } from "./components/notifications/NotificationPermissionBanner";
+import { useSyncManager } from "./hooks/useSyncManager";
 
 // Lazy load pages for better code splitting
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -51,6 +52,11 @@ interface AppProps {
   persister: Persister;
 }
 
+const SyncInitializer = () => {
+  useSyncManager();
+  return null;
+};
+
 const App = ({ queryClient, persister }: AppProps) => (
   <PersistQueryClientProvider
     client={queryClient}
@@ -69,6 +75,7 @@ const App = ({ queryClient, persister }: AppProps) => (
         <ShiftProvider>
           <SessionTimeoutWarning />
           <TooltipProvider>
+            <SyncInitializer />
             <Toaster />
             <Sonner />
             <OfflineBanner />

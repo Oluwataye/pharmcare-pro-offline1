@@ -1,134 +1,111 @@
-
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOffline } from '@/contexts/OfflineContext';
 import { useToast } from '@/hooks/use-toast';
-
-interface OfflineOperation<T = any> {
-  type: 'create' | 'update' | 'delete';
-  resource: string;
-  id?: string;
-  data?: T;
-  timestamp: number;
-  synced: boolean;
-}
+import {
+  enqueueOperation,
+  clearAllOperations,
+  type OfflineOperation,
+} from '@/lib/offlineQueue';
 
 export function useOfflineData() {
   const queryClient = useQueryClient();
   const { isOnline } = useOffline();
   const { toast } = useToast();
-  const [pendingOperations, setPendingOperations] = useState<OfflineOperation[]>(() => {
-    const stored = localStorage.getItem('PENDING_OPERATIONS');
-    return stored ? JSON.parse(stored) : [];
-  });
 
-  // Save an operation for later sync
-  const queueOperation = <T>(operation: Omit<OfflineOperation<T>, 'timestamp' | 'synced'>) => {
-    const newOperation: OfflineOperation = {
-      ...operation,
-      timestamp: Date.now(),
-      synced: false
-    };
+  // Keep a lightweight pending-count in React state so the UI can react.
+  // The actual data lives in IndexedDB — React state is NOT the source of truth.
+  const [pendingCount, setPendingCount] = useState(0);
 
-    const updatedOperations = [...pendingOperations, newOperation];
-    setPendingOperations(updatedOperations);
-    localStorage.setItem('PENDING_OPERATIONS', JSON.stringify(updatedOperations));
-    localStorage.setItem('SYNC_PENDING', 'true');
-    
-    // Update the local cache immediately
-    updateLocalCache(newOperation);
-    
-    return newOperation;
-  };
-  
-  // Update the React Query cache based on the operation
-  const updateLocalCache = (operation: OfflineOperation) => {
+  // -----------------------------------------------------------------------
+  // Internal helpers
+  // -----------------------------------------------------------------------
+
+  const updateLocalCache = (operation: Omit<OfflineOperation, 'id' | 'timestamp' | 'synced'>) => {
     switch (operation.type) {
       case 'create': {
-        queryClient.setQueryData([operation.resource], (old: any[] = []) => {
-          return [...old, operation.data];
-        });
+        queryClient.setQueryData([operation.resource], (old: any[] = []) => [
+          ...old,
+          operation.data,
+        ]);
         break;
       }
       case 'update': {
-        queryClient.setQueryData([operation.resource], (old: any[] = []) => {
-          return old.map(item => 
-            item.id === operation.id ? { ...item, ...operation.data } : item
-          );
-        });
+        queryClient.setQueryData([operation.resource], (old: any[] = []) =>
+          old.map((item) =>
+            item.id === operation.recordId ? { ...item, ...operation.data } : item
+          )
+        );
         break;
       }
       case 'delete': {
-        queryClient.setQueryData([operation.resource], (old: any[] = []) => {
-          return old.filter(item => item.id !== operation.id);
-        });
+        queryClient.setQueryData([operation.resource], (old: any[] = []) =>
+          old.filter((item) => item.id !== operation.recordId)
+        );
         break;
       }
     }
   };
 
-  // Handle offline create operation
-  const createOfflineItem = <T>(resource: string, data: T) => {
+  const queue = async (
+    op: Omit<OfflineOperation, 'id' | 'timestamp' | 'synced'>
+  ) => {
+    await enqueueOperation(op);
+    setPendingCount((c) => c + 1);
+    localStorage.setItem('SYNC_PENDING', 'true');
+
+    // Optimistically update the in-memory React Query cache
+    updateLocalCache(op);
+  };
+
+  // -----------------------------------------------------------------------
+  // Public API — same shape as the old hook so all callers compile unchanged
+  // -----------------------------------------------------------------------
+
+  const createOfflineItem = async <T>(resource: string, data: T) => {
     if (!isOnline) {
       toast({
-        title: "Offline Mode",
+        title: 'Offline Mode',
         description: `Your ${resource} has been saved offline and will sync when you're back online.`,
       });
     }
-    
-    // Generate a temporary ID for the item
     const tempId = `temp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    const itemWithId = { ...data, id: tempId };
-    
-    return queueOperation({
-      type: 'create',
-      resource,
-      data: itemWithId,
-    });
+    const itemWithId = { ...(data as object), id: tempId } as T & { id: string };
+
+    await queue({ type: 'create', resource, data: itemWithId });
+    return itemWithId;
   };
 
-  // Handle offline update operation
-  const updateOfflineItem = <T>(resource: string, id: string, data: Partial<T>) => {
+  const updateOfflineItem = async <T>(resource: string, recordId: string, data: Partial<T>) => {
     if (!isOnline) {
       toast({
-        title: "Offline Mode",
+        title: 'Offline Mode',
         description: `Your changes to this ${resource} have been saved offline and will sync when you're back online.`,
       });
     }
-    
-    return queueOperation({
-      type: 'update',
-      resource,
-      id,
-      data,
-    });
+    await queue({ type: 'update', resource, recordId, data });
   };
 
-  // Handle offline delete operation
-  const deleteOfflineItem = (resource: string, id: string) => {
+  const deleteOfflineItem = async (resource: string, recordId: string) => {
     if (!isOnline) {
       toast({
-        title: "Offline Mode",
+        title: 'Offline Mode',
         description: `This ${resource} has been marked for deletion and will be removed when you're back online.`,
       });
     }
-    
-    return queueOperation({
-      type: 'delete',
-      resource,
-      id,
-    });
+    await queue({ type: 'delete', resource, recordId });
   };
 
-  // Clear all pending operations after they've been processed
-  const clearPendingOperations = () => {
-    setPendingOperations([]);
-    localStorage.removeItem('PENDING_OPERATIONS');
+  const clearPendingOperations = async () => {
+    await clearAllOperations();
+    setPendingCount(0);
     localStorage.setItem('SYNC_PENDING', 'false');
   };
 
   return {
-    pendingOperations,
+    /** @deprecated use pendingCount instead */
+    pendingOperations: [] as OfflineOperation[],
+    pendingCount,
     createOfflineItem,
     updateOfflineItem,
     deleteOfflineItem,

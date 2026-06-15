@@ -141,13 +141,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // Automatic logout on window close/tab close (for shared workstations)
-    const handleBeforeUnload = () => {
-      // Clear session storage on window close to ensure clean state next launch
-      sessionStorage.clear();
-    };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    // NOTE: We intentionally do NOT clear auth on beforeunload because
+    // that event fires on page refresh too, not only on tab close.
+    // Auth tokens are stored in localStorage and are cleared only on explicit logout.
 
     // Periodic session validity check (every 5 minutes)
     const sessionCheckInterval = setInterval(async () => {
@@ -164,7 +161,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       subscription.unsubscribe();
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       clearInterval(sessionCheckInterval);
     };
   }, []);
@@ -240,7 +236,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Clear all sensitive session data
       secureStorage.clear();
-      sessionStorage.clear();
+      localStorage.removeItem('offline_token');
+      localStorage.removeItem('offline_user');
 
       await db.auth.signOut();
 
