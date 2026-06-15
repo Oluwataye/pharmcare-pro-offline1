@@ -113,8 +113,8 @@ echo.
 :: ======================================================
 echo [4/5] Starting Application Server...
 
-:: Start server in background with auto-restart supervisor loop
-start /b "" cmd /c ":loop && node index.js && timeout /t 3 && goto loop" >nul 2>&1
+:: Start server in background via supervisor (auto-restarts on crash)
+start "" /b cmd /c ""%~dp0server\supervisor.bat"" >nul 2>&1
 
 :: Wait and verify server started
 echo   ^> Waiting for server to initialize...
