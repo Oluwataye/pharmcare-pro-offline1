@@ -98,6 +98,17 @@ async function migrate() {
             console.log("⚠ Failed to create 'token_blacklist' table:", err.message);
         }
 
+        // 5.6. Check/Add 'is_active' to users (soft-delete support)
+        try {
+            await connection.query("SELECT is_active FROM users LIMIT 1");
+            console.log("✓ 'is_active' column exists in 'users'");
+        } catch (err) {
+            console.log("⚠ 'is_active' column missing in 'users'. Adding it...");
+            await connection.query("ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1");
+            console.log("✓ Added 'is_active' to 'users' (all existing users set to active)");
+        }
+
+
         // 6. Add indexes for performance optimization (M-05)
         const indexesToCreate = [
             { table: 'sales', name: 'idx_sales_created_at', columns: 'created_at' },

@@ -15,7 +15,7 @@ import { AddUserDialog } from "@/components/users/AddUserDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { EditUserDialog } from "@/components/users/EditUserDialog";
 import { UserPermissionsDialog } from "@/components/users/UserPermissionsDialog";
-import { DeleteUserDialog } from "@/components/users/DeleteUserDialog";
+import { DeactivateUserDialog } from "@/components/users/DeactivateUserDialog";
 import { ResetPasswordDialog } from "@/components/users/ResetPasswordDialog";
 import { User } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -83,6 +83,7 @@ const Users = () => {
         name: profile.name,
         username: profile.username || undefined,
         role: rolesMap.get(profile.user_id) || 'CASHIER',
+        is_active: authUsers.find((u: any) => u.id === profile.user_id)?.is_active !== false,
       }));
 
       setUsers(usersList);
@@ -137,6 +138,13 @@ const Users = () => {
     });
   };
 
+  const handleUserDeactivated = (userId: string, isActive: boolean) => {
+    setUsers(users.map(user =>
+      user.id === userId ? { ...user, is_active: isActive } : user
+    ));
+  };
+
+  // Keep for backward compat if anything else calls it
   const handleUserDeleted = (userId: string) => {
     setUsers(users.filter(user => user.id !== userId));
   };
@@ -155,7 +163,7 @@ const Users = () => {
 
   // Calculate user statistics
   const totalUsers = users.length;
-  const activeUsers = users.length;
+  const activeUsers = users.filter(user => user.is_active !== false).length;
   const pharmacists = users.filter(user => user.role === "PHARMACIST").length;
   const dispensers = users.filter(user => user.role === "CASHIER" || user.role === "DISPENSER").length;
   const superAdmins = users.filter(user => user.role === "SUPER_ADMIN").length;
@@ -254,6 +262,7 @@ const Users = () => {
                     <TableHead className="hidden sm:table-cell">Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead className="hidden md:table-cell">Username</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -266,7 +275,10 @@ const Users = () => {
                     </TableRow>
                   ) : (
                     filteredUsers.map((user) => (
-                      <TableRow key={user.id} className="hover:bg-muted/50">
+                      <TableRow
+                        key={user.id}
+                        className={`hover:bg-muted/50 ${user.is_active === false ? 'opacity-60' : ''}`}
+                      >
                         <TableCell className="font-medium">{user.name}</TableCell>
                         <TableCell className="hidden sm:table-cell">{user.email}</TableCell>
                         <TableCell>
@@ -283,6 +295,15 @@ const Users = () => {
                         </TableCell>
                         <TableCell className="hidden md:table-cell">{user.username || "-"}</TableCell>
                         <TableCell>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            user.is_active === false
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {user.is_active === false ? 'Inactive' : 'Active'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
                           <div className="flex space-x-2">
                             {canEditUsers() && (
                               <>
@@ -294,7 +315,7 @@ const Users = () => {
                               <UserPermissionsDialog user={user} />
                             )}
                             {canDeleteUsers() && (
-                              <DeleteUserDialog user={user} onUserDeleted={handleUserDeleted} />
+                              <DeactivateUserDialog user={user} onUserDeactivated={handleUserDeactivated} />
                             )}
                           </div>
                         </TableCell>

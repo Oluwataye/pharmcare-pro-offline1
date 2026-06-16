@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { CashierHeader } from "./CashierHeader";
 import { CashierStatsCards } from "./CashierStatsCards";
+import { WelcomeBanner } from "@/components/admin/WelcomeBanner";
 import { EnhancedTransactionsCard } from "@/components/admin/EnhancedTransactionsCard";
 import { EnhancedLowStockCard } from "@/components/admin/EnhancedLowStockCard";
 import { TransactionsTable } from "./TransactionsTable";
@@ -213,6 +214,10 @@ export const CashierDashboardContent = () => {
         </Card>
       ) : (
         <>
+          <WelcomeBanner
+            lowStockCount={lowStockItems.length}
+            onQuickAction={() => handleCardClick('/inventory')}
+          />
           <CashierStatsCards
             statsCards={statsCards}
             handleCardClick={handleCardClick}

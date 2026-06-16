@@ -22,64 +22,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading: true,
   });
   const [session, setSession] = React.useState<Session | null>(null);
+  // Track explicit login in progress so onAuthStateChange doesn't fire a
+  // redundant isLoading cycle that causes the white-blank-page flash.
+  const isLoggingInRef = React.useRef(false);
   const { toast } = useToast();
 
-  // Fetch user profile and role from database
+  // Fetch user profile and role from the dedicated /api/auth/me endpoint.
+  // This avoids the RBAC block on reading user_roles directly for non-admin users.
   const fetchUserProfile = async (userId: string): Promise<AppUser | null> => {
     const isOfflineMode = import.meta.env.VITE_APP_MODE === 'offline';
 
     try {
-      // Use specific columns and limit to stabilize the 406-prone single fetch
-      const { data: profiles, error: profileError } = await db
-        .from('profiles')
-        .select('name, username')
-        .eq('user_id', userId)
-        .limit(1);
-
-      if (profileError && !isOfflineMode) throw profileError;
-
-      const profile = (profiles as any[])?.[0];
-
-      const { data: roles, error: rolesError } = await db
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-        .limit(1);
-
-      if (rolesError && !isOfflineMode) throw rolesError;
-
-      const roleData = (roles as any[])?.[0];
-
-      // If we are in offline mode and DB fetch failed, provide a fallback
-      if (isOfflineMode && (!profile || !roleData)) {
-        console.warn('Offline Mode: Using fallback profile for', userId);
-        return {
-          id: userId,
-          email: 'user@pharmcare.local',
-          name: 'Offline User',
-          username: 'user',
-          role: 'CASHIER', // Default to cashier for safety
-        };
+      const token = localStorage.getItem('offline_token');
+      if (!token) {
+        throw new Error('No auth token found');
       }
 
-      if (!profile || !roleData) {
-        console.warn('No profile or role found for user:', userId);
-        return null;
+      const API_URL = `${window.location.origin}/api`;
+      const res = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        // If the dedicated endpoint fails, fall back to generic offline profile
+        throw new Error(`/api/auth/me returned ${res.status}`);
       }
 
-      const { data: { user } } = await db.auth.getUser();
+      const me = await res.json();
 
       return {
         id: userId,
-        email: user?.email || '',
-        name: profile.name,
-        username: profile.username || undefined,
-        role: roleData.role as UserRole,
+        email: me.email || '',
+        name: me.name,
+        username: me.username || undefined,
+        role: me.role as UserRole,
       };
     } catch (error) {
       console.error('Error fetching user profile details:', error);
 
       if (isOfflineMode) {
+        // Last-resort fallback only when API is genuinely unreachable
         return {
           id: userId,
           email: 'user@pharmcare.local',
@@ -100,15 +82,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
 
         if (session?.user) {
-          // Defer profile fetching
-          setTimeout(async () => {
-            const userProfile = await fetchUserProfile(session.user.id);
-            setAuthState({
-              user: userProfile,
-              isAuthenticated: !!userProfile,
-              isLoading: false,
-            });
-          }, 0);
+          // Skip if login() is already handling auth state — prevents the
+          // double-setState that causes a blank page flash on first login.
+          if (isLoggingInRef.current) return;
+
+          const userProfile = await fetchUserProfile(session.user.id);
+          setAuthState({
+            user: userProfile,
+            isAuthenticated: !!userProfile,
+            isLoading: false,
+          });
         } else {
           setAuthState({
             user: null,
@@ -166,6 +149,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
+    // Signal to onAuthStateChange that we are handling auth state here.
+    isLoggingInRef.current = true;
     setAuthState(prev => ({ ...prev, isLoading: true }));
 
     try {
@@ -199,6 +184,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Log successful login
         logSuccessfulLogin(data.user.id, email, userProfile.role);
 
+        // Set authenticated state BEFORE navigate() is called by the Login page.
+        // isLoggingInRef prevents onAuthStateChange from overwriting this.
         setAuthState({
           user: userProfile,
           isAuthenticated: true,
@@ -221,6 +208,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         variant: 'destructive',
       });
       throw error;
+    } finally {
+      // Release the lock so future auth events (e.g. token refresh) are handled.
+      isLoggingInRef.current = false;
     }
   };
 

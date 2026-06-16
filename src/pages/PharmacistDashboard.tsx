@@ -8,6 +8,7 @@ import { MedicationStats } from "@/components/pharmacist/MedicationStats";
 import { MedicationTable } from "@/components/pharmacist/MedicationTable";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useNavigate } from "react-router-dom";
+import { WelcomeBanner } from "@/components/admin/WelcomeBanner";
 import { EnhancedTransactionsCard } from "@/components/admin/EnhancedTransactionsCard";
 import { EnhancedLowStockCard } from "@/components/admin/EnhancedLowStockCard";
 import { useRefundAnalytics } from "@/hooks/sales/useRefundAnalytics";
@@ -260,6 +261,10 @@ const PharmacistDashboard = () => {
         </Card>
       ) : (
         <>
+          <WelcomeBanner
+            lowStockCount={lowStockCount}
+            onQuickAction={() => handleCardClick('/inventory')}
+          />
           <MedicationStats
             totalMedications={medications.length}
             lowStockCount={lowStockCount}

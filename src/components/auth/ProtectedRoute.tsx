@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Permission } from "@/lib/types";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Spinner } from "@/components/ui/spinner";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -15,7 +16,11 @@ const ProtectedRoute = ({ children, requiredPermission }: ProtectedRouteProps) =
   const location = useLocation();
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Spinner className="h-10 w-10 text-primary" />
+      </div>
+    );
   }
 
   if (!isAuthenticated) {

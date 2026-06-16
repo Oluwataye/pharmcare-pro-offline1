@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { DispenserHeader } from "./DispenserHeader";
 import { DispenserStatsCards } from "./DispenserStatsCards";
+import { WelcomeBanner } from "@/components/admin/WelcomeBanner";
 import { EnhancedTransactionsCard } from "@/components/admin/EnhancedTransactionsCard";
 import { EnhancedLowStockCard } from "@/components/admin/EnhancedLowStockCard";
 import { TransactionsTable } from "./TransactionsTable";
@@ -210,6 +211,10 @@ export const DispenserDashboardContent = () => {
                 </Card>
             ) : (
                 <>
+                    <WelcomeBanner
+                        lowStockCount={lowStockItems.length}
+                        onQuickAction={() => handleCardClick('/inventory')}
+                    />
                     <DispenserStatsCards
                         statsCards={statsCards}
                         handleCardClick={handleCardClick}

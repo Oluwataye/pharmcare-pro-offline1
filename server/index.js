@@ -433,9 +433,9 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         const { email, password } = req.body;
         logToFile(`LOGIN ATTEMPT: Email="${email}" PasswordLength=${password ? password.length : 0}`);
 
-        const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+        const [rows] = await pool.query('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
         if (rows.length === 0) {
-            logToFile(`LOGIN FAILED: User not found for email="${email}"`);
+            logToFile(`LOGIN FAILED: User not found or deactivated for email="${email}"`);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
@@ -503,6 +503,50 @@ app.post('/api/auth/logout', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('[Server] Logout error:', err);
         res.status(500).json({ error: 'Logout failed' });
+    }
+});
+
+// --- GET /api/auth/me ---
+// Any authenticated user can fetch their OWN profile and role.
+// This avoids the admin-only restriction on /api/user_roles.
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const [profileRows] = await pool.query(
+            'SELECT name, username FROM profiles WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+        const [roleRows] = await pool.query(
+            'SELECT role FROM user_roles WHERE user_id = ? LIMIT 1',
+            [userId]
+        );
+        const [userRows] = await pool.query(
+            'SELECT email, role as db_role FROM users WHERE id = ? LIMIT 1',
+            [userId]
+        );
+
+        const profile = profileRows[0];
+        const roleRow = roleRows[0];
+        const userRow = userRows[0];
+
+        if (!profile || !userRow) {
+            return res.status(404).json({ error: 'Profile not found' });
+        }
+
+        // Prefer user_roles table; fall back to users.role
+        const role = normalizeRole({ role: roleRow?.role || userRow?.db_role || 'CASHIER' }).role;
+
+        res.json({
+            id: userId,
+            email: userRow.email,
+            name: profile.name,
+            username: profile.username || null,
+            role
+        });
+    } catch (err) {
+        console.error('[Server] /api/auth/me error:', err);
+        res.status(500).json({ error: 'Failed to load profile' });
     }
 });
 
@@ -984,29 +1028,48 @@ app.post('/api/functions/update-user', requireRole(['ADMIN', 'SUPER_ADMIN']), as
     }
 });
 
-app.post('/api/functions/delete-user', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+// Soft-delete: sets is_active=0, preserves all historical data
+app.post('/api/functions/deactivate-user', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
     const connection = await pool.getConnection();
     try {
-        await connection.beginTransaction();
-
         const { userId } = req.body;
         if (!userId) throw new Error('User ID is required');
 
-        console.log(`[Server] DELETE USER: ${userId}`);
+        // Prevent deactivating yourself
+        if (req.user && req.user.id === userId) {
+            return res.status(400).json({ error: 'You cannot deactivate your own account.' });
+        }
 
-        // Delete in order: roles, profiles, then user (respects FK constraints)
-        await connection.query('DELETE FROM user_roles WHERE user_id = ?', [userId]);
-        await connection.query('DELETE FROM profiles WHERE user_id = ?', [userId]);
-        await connection.query('DELETE FROM users WHERE id = ?', [userId]);
+        console.log(`[Server] DEACTIVATE USER: ${userId}`);
+        await connection.query('UPDATE users SET is_active = 0 WHERE id = ?', [userId]);
 
-        await connection.commit();
-        console.log(`[Server] User Deleted: ${userId}`);
+        console.log(`[Server] User Deactivated: ${userId}`);
         res.json({ success: true });
 
     } catch (err) {
-        if (connection) await connection.rollback();
-        console.error('[Server] Delete User Failed:', err);
-        res.status(500).json({ error: 'Delete failed', details: err.message });
+        console.error('[Server] Deactivate User Failed:', err);
+        res.status(500).json({ error: 'Deactivation failed', details: err.message });
+    } finally {
+        connection.release();
+    }
+});
+
+// Reactivate a previously deactivated user
+app.post('/api/functions/activate-user', requireRole(['ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        const { userId } = req.body;
+        if (!userId) throw new Error('User ID is required');
+
+        console.log(`[Server] ACTIVATE USER: ${userId}`);
+        await connection.query('UPDATE users SET is_active = 1 WHERE id = ?', [userId]);
+
+        console.log(`[Server] User Activated: ${userId}`);
+        res.json({ success: true });
+
+    } catch (err) {
+        console.error('[Server] Activate User Failed:', err);
+        res.status(500).json({ error: 'Activation failed', details: err.message });
     } finally {
         connection.release();
     }
@@ -1159,9 +1222,11 @@ app.get('/api/stock_movements', requireAuth, async (req, res) => {
 
 app.post('/api/functions/list-users', requireAuth, async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT id, email, role, first_name, last_name FROM users');
+        // include is_active so the frontend can show status and filter
+        const [rows] = await pool.query('SELECT id, email, role, first_name, last_name, is_active FROM users');
         const users = rows.map(u => ({
             ...u,
+            is_active: u.is_active === 1 || u.is_active === true,
             role: normalizeRole(u).role
         }));
         res.json({ users });

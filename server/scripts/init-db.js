@@ -324,13 +324,13 @@ async function initDB() {
       console.log('Phase 3: Creating Admin Account...');
       await connection.query(
         'INSERT INTO users (id, email, password_hash, first_name, last_name, role) VALUES (?, ?, ?, ?, ?, ?)',
-        [adminId, adminEmail, passwordHash, 'System', 'Admin', 'SUPER_ADMIN']
+        [adminId, adminEmail, passwordHash, 'Oluwataye', 'Admin', 'SUPER_ADMIN']
       );
 
       // Create profile
       await connection.query(
         'INSERT INTO profiles (id, user_id, name, username) VALUES (?, ?, ?, ?)',
-        [crypto.randomUUID(), adminId, 'System Admin', 'admin']
+        [crypto.randomUUID(), adminId, 'Oluwataye Admin', 'admin']
       );
 
       // Create role
@@ -350,7 +350,7 @@ async function initDB() {
       if (profiles.length === 0) {
         await connection.query(
           'INSERT INTO profiles (id, user_id, name, username) VALUES (?, ?, ?, ?)',
-          [crypto.randomUUID(), existingUser.id, 'System Admin', 'admin']
+          [crypto.randomUUID(), existingUser.id, 'Oluwataye Admin', 'admin']
         );
       }
 
