@@ -16,6 +16,7 @@ import {
   LogOut,
   FileText,
   ChevronLeft,
+  ChevronRight,
   Receipt,
   Printer,
   Clock,
@@ -39,12 +40,27 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NairaSign } from "../icons/NairaSign";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 interface SidebarProps {
   onClose?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-const Sidebar = ({ onClose }: SidebarProps) => {
+const Sidebar = ({ onClose, isCollapsed = false, onToggleCollapse }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, user } = useAuth();
@@ -224,23 +240,36 @@ const Sidebar = ({ onClose }: SidebarProps) => {
   };
 
   return (
-    <div className="flex h-full md:h-screen w-full md:w-64 flex-col bg-gradient-to-b from-background to-muted/30 border-r shadow-sm">
+    <div className={cn(
+      "flex h-full md:h-screen w-full flex-col bg-gradient-to-b from-background to-muted/30 border-r shadow-sm transition-all duration-300 ease-in-out",
+      isCollapsed ? "md:w-20" : "md:w-64"
+    )}>
       {/* Header with Logo and Store Name */}
-      <div className="flex items-center justify-between p-4 border-b bg-card">
-        <div className="flex items-center gap-3 flex-1">
-          {storeLogo ? (
-            <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-primary/20 flex-shrink-0 shadow-sm">
+      <div className={cn(
+        "flex items-center p-4 border-b bg-card bg-gradient-to-r from-card to-muted/10 transition-all duration-300",
+        isCollapsed ? "justify-center" : "justify-between"
+      )}>
+        <div className={cn("flex items-center gap-3 flex-1 min-w-0", isCollapsed ? "justify-center" : "")}>
+          {storeLogo && (
+            <div className={cn(
+              "rounded-lg overflow-hidden border-2 border-primary/20 flex-shrink-0 shadow-sm flex items-center justify-center bg-white p-1",
+              isCollapsed ? "w-8 h-8" : "w-10 h-10"
+            )}>
               <img
                 src={storeLogo}
                 alt="Store Logo"
-                className="w-full h-full object-contain bg-white p-1"
+                className="w-full h-full object-contain"
               />
             </div>
-          ) : null}
-          <h1 className="text-lg font-bold text-primary truncate">
-            {storeName}
-          </h1>
+          )}
+          {!isCollapsed && (
+            <h1 className="text-lg font-bold text-primary truncate animate-in fade-in duration-300">
+              {storeName}
+            </h1>
+          )}
         </div>
+        
+        {/* Mobile close button */}
         <Button
           variant="ghost"
           size="icon"
@@ -249,31 +278,65 @@ const Sidebar = ({ onClose }: SidebarProps) => {
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
+
+        {/* Desktop Collapse/Expand control */}
+        {onToggleCollapse && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleCollapse}
+            className="hidden md:flex flex-shrink-0 hover:bg-primary/10 text-muted-foreground hover:text-foreground h-8 w-8 rounded-md"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {isCollapsed ? <ChevronRight className="h-4 w-4 text-primary font-bold" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+        )}
       </div>
 
       {/* User Profile Section */}
       {user && (
         <div className="px-4 py-4 border-b bg-card/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 border-2 border-primary/20">
-              <span className="text-sm font-semibold text-primary">
-                {user.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
-              </span>
+          {isCollapsed ? (
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <div className="flex justify-center">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 border-2 border-primary/20 cursor-pointer">
+                    <span className="text-sm font-semibold text-primary">
+                      {user.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="flex flex-col gap-0.5 z-50">
+                <p className="font-semibold text-sm">{user.name}</p>
+                <p className="text-xs text-muted-foreground capitalize">{user.role.toLowerCase().replace('_', ' ')}</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="flex items-center gap-3 animate-in fade-in duration-300">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 border-2 border-primary/20">
+                <span className="text-sm font-semibold text-primary">
+                  {user.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {user.name}
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {user.role.toLowerCase().replace('_', ' ')}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">
-                {user.name}
-              </p>
-              <p className="text-xs text-muted-foreground capitalize">
-                {user.role.toLowerCase().replace('_', ' ')}
-              </p>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
       {/* Navigation Menu */}
-      <nav className="flex-1 space-y-1 p-3 overflow-y-auto custom-scrollbar">
+      <nav className={cn(
+        "flex-1 space-y-1 p-3 overflow-y-auto custom-scrollbar transition-all",
+        isCollapsed ? "px-2" : "px-3"
+      )}>
         {menuItems.map((item) => {
           if (!item.condition) return null;
 
@@ -286,6 +349,85 @@ const Sidebar = ({ onClose }: SidebarProps) => {
             : location.pathname === item.path ||
             location.pathname.startsWith(item.path + "/") ||
             (item.children?.some(child => location.pathname === child.path || (child.path !== '/' && location.pathname.startsWith(child.path))));
+
+          if (isCollapsed) {
+            if (hasChildren) {
+              return (
+                <div key={item.label} className="flex justify-center py-0.5">
+                  <DropdownMenu>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className={cn(
+                              "w-12 justify-center h-11 px-0 transition-all duration-200 border-l-4 rounded-md relative group",
+                              isParentActive
+                                ? "bg-primary text-primary-foreground shadow-md border-primary"
+                                : "hover:bg-accent/50 border-transparent text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            <item.icon className="h-5 w-5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <span className="font-medium">{item.label}</span>
+                      </TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent side="right" align="start" className="w-56 ml-2 bg-card border shadow-lg z-50 animate-in fade-in zoom-in-95 duration-100">
+                      <DropdownMenuLabel className="text-primary font-semibold text-xs py-1.5 px-3 bg-muted/20">{item.label}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {item.children!.map((child) => {
+                        if (child.condition === false) return null;
+                        const isChildActive = location.pathname === child.path || (child.path !== '/' && location.pathname.startsWith(child.path));
+
+                        return (
+                          <DropdownMenuItem
+                            key={child.path}
+                            onClick={() => handleNavigate(child.path)}
+                            className={cn(
+                              "flex items-center gap-3 cursor-pointer py-2 px-3 text-sm transition-colors rounded-sm focus:bg-primary focus:text-primary-foreground",
+                              isChildActive
+                                ? "bg-primary/10 text-primary font-medium"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            <child.icon className="h-4 w-4 flex-shrink-0" />
+                            <span>{child.label}</span>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              );
+            } else {
+              return (
+                <div key={item.label} className="flex justify-center py-0.5">
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className={cn(
+                          "w-12 justify-center h-11 px-0 transition-all duration-200 border-l-4 rounded-md",
+                          isParentActive
+                            ? "bg-primary text-primary-foreground shadow-md border-primary"
+                            : "hover:bg-accent/50 border-transparent text-muted-foreground hover:text-foreground"
+                        )}
+                        onClick={() => handleNavigate(item.path)}
+                      >
+                        <item.icon className="h-5 w-5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                      <span className="font-medium">{item.label}</span>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              );
+            }
+          }
 
           return (
             <div key={item.label} className="space-y-1">
@@ -354,24 +496,45 @@ const Sidebar = ({ onClose }: SidebarProps) => {
 
       {/* Logout Button */}
       <div className="p-3 border-t bg-card/50">
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-3 h-11 px-4 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all"
-          onClick={handleLogout}
-        >
-          <LogOut className="h-5 w-5" />
-          <span className="font-medium">Logout</span>
-        </Button>
+        {isCollapsed ? (
+          <div className="flex justify-center">
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-12 justify-center h-11 px-0 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all border-l-4 border-transparent rounded-md"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <span className="font-medium text-destructive">Logout</span>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 h-11 px-4 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-5 w-5" />
+            <span className="font-medium">Logout</span>
+          </Button>
+        )}
       </div>
 
       {/* Sync Indicator & Footer */}
-      <div className="p-3 border-t flex items-center justify-between bg-card/30">
-        <OfflineSyncIndicator />
-        <p className="text-xs text-muted-foreground">© T-Tech</p>
+      <div className={cn(
+        "p-3 border-t bg-card/30 flex transition-all duration-300",
+        isCollapsed ? "justify-center" : "items-center justify-between"
+      )}>
+        <OfflineSyncIndicator collapsed={isCollapsed} />
+        {!isCollapsed && <p className="text-xs text-muted-foreground animate-in fade-in duration-300">© T-Tech</p>}
       </div>
     </div>
   );
 };
 
-
-export default Sidebar;
+export default Sidebar;;

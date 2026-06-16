@@ -17,7 +17,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function OfflineSyncIndicator() {
+interface OfflineSyncIndicatorProps {
+  collapsed?: boolean;
+}
+
+export function OfflineSyncIndicator({ collapsed }: OfflineSyncIndicatorProps) {
   const { isOnline, syncPending, pendingCount, syncData, isSyncing } = useOffline();
 
   const getStatusIcon = () => {
@@ -54,15 +58,18 @@ export function OfflineSyncIndicator() {
           variant="ghost"
           size="sm"
           className={cn(
-            "h-8 gap-2 px-3 border rounded-full transition-all",
+            "h-8 transition-all border rounded-full",
+            collapsed ? "px-2 gap-0 w-8 justify-center" : "gap-2 px-3",
             getStatusColor()
           )}
         >
           {getStatusIcon()}
-          <span className="text-xs font-medium hidden sm:inline">
-            {getStatusText()}
-          </span>
-          {pendingCount > 0 && (
+          {!collapsed && (
+            <span className="text-xs font-medium hidden sm:inline">
+              {getStatusText()}
+            </span>
+          )}
+          {pendingCount > 0 && !collapsed && (
             <Badge 
               variant="secondary" 
               className="h-5 min-w-5 px-1.5 text-xs bg-yellow-500 text-white"

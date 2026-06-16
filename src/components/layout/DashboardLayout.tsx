@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
@@ -7,10 +6,25 @@ import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { ShiftStatusHeader } from "../shifts/ShiftStatusHeader";
+import { cn } from "@/lib/utils";
 
 const DashboardLayout = () => {
   const { isAuthenticated, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Persisted collapsible state for main sidebar
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem("sidebar_collapsed") === "true";
+  });
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem("sidebar_collapsed", String(next));
+      return next;
+    });
+  };
+
   const location = useLocation();
 
   if (isLoading) {
@@ -47,8 +61,16 @@ const DashboardLayout = () => {
       </div>
 
       {/* Sidebar - hidden on mobile by default unless toggled */}
-      <div className={`${sidebarOpen ? 'block' : 'hidden'} md:block md:flex-shrink-0 z-20`}>
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+      <div className={cn(
+        sidebarOpen ? 'block' : 'hidden', 
+        'md:block md:flex-shrink-0 z-20 transition-all duration-300 ease-in-out',
+        isSidebarCollapsed ? 'md:w-20' : 'md:w-64'
+      )}>
+        <Sidebar 
+          onClose={() => setSidebarOpen(false)} 
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={toggleSidebarCollapse}
+        />
       </div>
 
       {/* Main content */}
