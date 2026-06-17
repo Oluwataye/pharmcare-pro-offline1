@@ -19,6 +19,21 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === 'development' && componentTagger(),
+    // Conditionally inject dev-only external scripts at build/serve time.
+    // Rules:
+    //   - Development mode + VITE_APP_MODE !== 'offline' → inject script tag
+    //   - Production mode OR VITE_APP_MODE === 'offline' → strip comment, no script
+    {
+      name: 'inject-dev-scripts',
+      transformIndexHtml(html) {
+        const isDevMode = mode === 'development';
+        const isOffline = process.env.VITE_APP_MODE === 'offline';
+        const devScript = isDevMode && !isOffline
+          ? '<script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>'
+          : '';
+        return html.replace('<!-- dev-scripts -->', devScript);
+      },
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'og-image.png', 'placeholder.svg'],
