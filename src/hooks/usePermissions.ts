@@ -31,8 +31,8 @@ export function usePermissions() {
   };
 
   const canManageInventory = (): boolean => {
-    // Explicitly prevent CASHIER from managing inventory
-    if (user?.role === 'CASHIER') return false;
+    // Explicitly prevent CASHIER, DISPENSER and PHARMACIST from managing inventory
+    if (user?.role === 'CASHIER' || user?.role === 'DISPENSER' || user?.role === 'PHARMACIST') return false;
     return hasPermission({ action: 'create', resource: 'inventory' });
   };
 

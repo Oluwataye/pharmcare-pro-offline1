@@ -1646,9 +1646,9 @@ app.post('/api/:table', requireAuth, async (req, res) => {
         }
 
         // Additional table-specific RBAC checks
-        if (table === 'inventory' && !['SUPER_ADMIN', 'ADMIN', 'PHARMACIST'].includes(userRole)) {
+        if (table === 'inventory' && !['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
             logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to CREATE in inventory.`);
-            return res.status(403).json({ error: 'Forbidden', message: 'Only admins and pharmacists can create inventory items' });
+            return res.status(403).json({ error: 'Forbidden', message: 'Only admins can create inventory items' });
         }
 
         if (table === 'expenses' && !['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
@@ -1812,9 +1812,9 @@ app.patch(['/api/:table', '/api/:table/:id'], requireAuth, async (req, res) => {
         }
 
         // Additional table-specific RBAC checks
-        if (table === 'inventory' && !['SUPER_ADMIN', 'ADMIN', 'PHARMACIST'].includes(userRole)) {
+        if (table === 'inventory' && !['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {
             logToFile(`AUTH-FORBIDDEN: User ${req.user.email} (${userRole}) attempted to MODIFY inventory.`);
-            return res.status(403).json({ error: 'Forbidden', message: 'Only admins and pharmacists can modify inventory items' });
+            return res.status(403).json({ error: 'Forbidden', message: 'Only admins can modify inventory items' });
         }
 
         if (table === 'expenses' && !['SUPER_ADMIN', 'ADMIN'].includes(userRole)) {

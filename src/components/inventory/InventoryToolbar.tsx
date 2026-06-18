@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useEffect } from "react";
 
@@ -41,8 +42,10 @@ export const InventoryToolbar = ({
   onBulkUpload,
 }: InventoryToolbarProps) => {
   const { user } = useAuth();
+  const { canManageInventory } = usePermissions();
   const { suppliers, fetchSuppliers } = useSuppliers();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const canManage = canManageInventory();
 
   useEffect(() => {
     fetchSuppliers();
@@ -121,14 +124,16 @@ export const InventoryToolbar = ({
         >
           <Printer className="h-4 w-4" />
         </Button>
-        {isSuperAdmin && onBulkUpload && (
+        {isSuperAdmin && canManage && onBulkUpload && (
           <Button onClick={onBulkUpload} variant="outline" className="hidden sm:inline-flex shrink-0">
             <Upload className="mr-2 h-4 w-4" /> Bulk
           </Button>
         )}
-        <Button onClick={onAddItem} className="shrink-0">
-          <Plus className="mr-2 h-4 w-4" /> Add Product
-        </Button>
+        {canManage && (
+          <Button onClick={onAddItem} className="shrink-0">
+            <Plus className="mr-2 h-4 w-4" /> Add Product
+          </Button>
+        )}
       </div>
     </div>
   );

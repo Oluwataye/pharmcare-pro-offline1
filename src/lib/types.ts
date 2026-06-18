@@ -82,10 +82,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { action: 'read', resource: 'analytics' },
   ],
   PHARMACIST: [
-    { action: 'create', resource: 'inventory' },
     { action: 'read', resource: 'inventory' },
-    { action: 'update', resource: 'inventory' },
-    { action: 'delete', resource: 'inventory' },
     { action: 'read', resource: 'sales' },
     { action: 'create', resource: 'sales' },
     { action: 'update', resource: 'sales' },

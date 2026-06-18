@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import {
   Table,
@@ -15,6 +14,7 @@ import { TableActions } from "./table/TableActions";
 import { BatchDeleteBar } from "./table/BatchDeleteBar";
 import { InventoryTableHead } from "./table/InventoryTableHead";
 import { EmptyTableRow } from "./table/EmptyTableRow";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +45,8 @@ export const InventoryTable = ({
   onAdjustStock,
   suppliers = []
 }: InventoryTableProps) => {
+  const { canManageInventory } = usePermissions();
+  const canManage = canManageInventory();
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [adjustingItem, setAdjustingItem] = useState<InventoryItem | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -102,11 +104,11 @@ export const InventoryTable = ({
     }
   };
 
-  const colSpan = onBatchDelete ? 11 : 10;
+  const colSpan = (onBatchDelete && canManage) ? 11 : 10;
 
   return (
     <>
-      {selectedItems.length > 0 && (
+      {canManage && selectedItems.length > 0 && (
         <BatchDeleteBar
           selectedCount={selectedItems.length}
           onBatchDelete={() => setBatchDeleteConfirm(true)}
@@ -116,7 +118,7 @@ export const InventoryTable = ({
       <div className="rounded-md border">
         <Table>
           <InventoryTableHead
-            showBatchActions={!!onBatchDelete}
+            showBatchActions={!!(onBatchDelete && canManage)}
             hasItems={inventory.length > 0}
             allSelected={inventory.length > 0 && selectedItems.length === inventory.length}
             onSelectAll={toggleSelectAll}
@@ -129,7 +131,7 @@ export const InventoryTable = ({
                 const stockStatus = getStockStatus(item);
                 return (
                   <TableRow key={item.id}>
-                    {onBatchDelete && (
+                    {onBatchDelete && canManage && (
                       <TableCell>
                         <Checkbox
                           checked={selectedItems.includes(item.id)}
@@ -173,6 +175,7 @@ export const InventoryTable = ({
                         onEdit={() => handleEdit(item.id)}
                         onDelete={() => setDeleteConfirmId(item.id)}
                         onAdjust={onAdjustStock ? () => handleAdjust(item.id) : undefined}
+                        canManage={canManage}
                       />
                     </TableCell>
                   </TableRow>

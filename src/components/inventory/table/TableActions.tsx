@@ -8,9 +8,18 @@ interface TableActionsProps {
   onEdit: (itemId: string) => void;
   onDelete: (itemId: string) => void;
   onAdjust?: (itemId: string) => void;
+  canManage?: boolean;
 }
 
-export const TableActions = ({ itemId, onEdit, onDelete, onAdjust }: TableActionsProps) => {
+export const TableActions = ({ itemId, onEdit, onDelete, onAdjust, canManage = true }: TableActionsProps) => {
+  if (!canManage) {
+    return (
+      <div className="flex justify-end">
+        <span className="text-xs text-muted-foreground italic px-2">View only</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex justify-end gap-2">
       {onAdjust && (
