@@ -198,7 +198,8 @@ const Sidebar = ({ onClose, isCollapsed = false, onToggleCollapse }: SidebarProp
         {
           icon: ShieldAlert,
           label: "Technical Guide",
-          path: "/technical-guide"
+          path: "/technical-guide",
+          condition: isAdmin
         },
         {
           icon: GraduationCap,

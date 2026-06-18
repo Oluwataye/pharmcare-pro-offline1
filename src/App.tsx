@@ -234,7 +234,7 @@ const App = ({ queryClient, persister }: AppProps) => (
                   <Route
                     path="/technical-guide"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute adminOnly>
                         <Suspense fallback={<PageLoader />}><TechnicalGuide /></Suspense>
                       </ProtectedRoute>
                     }

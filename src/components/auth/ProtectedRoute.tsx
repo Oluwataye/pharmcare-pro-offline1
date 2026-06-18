@@ -8,11 +8,12 @@ import { Spinner } from "@/components/ui/spinner";
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredPermission?: Permission;
+  adminOnly?: boolean;
 }
 
-const ProtectedRoute = ({ children, requiredPermission }: ProtectedRouteProps) => {
+const ProtectedRoute = ({ children, requiredPermission, adminOnly }: ProtectedRouteProps) => {
   const { isAuthenticated, isLoading } = useAuth();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
   const location = useLocation();
 
   if (isLoading) {
@@ -25,6 +26,10 @@ const ProtectedRoute = ({ children, requiredPermission }: ProtectedRouteProps) =
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (adminOnly && !isAdmin) {
+    return <Navigate to="/" replace />;
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
