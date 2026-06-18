@@ -15,6 +15,7 @@ import { AlertTriangle, Receipt, RefreshCcw } from "lucide-react";
 import { NairaSign } from "../icons/NairaSign";
 import { db } from "@/lib/db-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { PendingQueuePanel } from "@/features/cashier/components/PendingQueuePanel";
 
 interface Transaction {
   id: string; // Changed from number to string for UUID
@@ -218,6 +219,10 @@ export const CashierDashboardContent = () => {
             lowStockCount={lowStockItems.length}
             onQuickAction={() => handleCardClick('/inventory')}
           />
+
+          {/* Dispensary Queue Panel — Cashier primary workflow */}
+          <PendingQueuePanel />
+
           <CashierStatsCards
             statsCards={statsCards}
             handleCardClick={handleCardClick}

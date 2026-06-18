@@ -3,6 +3,7 @@ import DispenserDashboard from "./DispenserDashboard";
 import PharmacistDashboard from "./PharmacistDashboard";
 import AdminDashboardContent from "@/components/admin/AdminDashboardContent";
 import { useInventoryAlerts } from "@/hooks/useInventoryAlerts";
+import { CashierDashboardContent } from "@/components/dispenser/CashierDashboardContent";
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ const Dashboard = () => {
 
   switch (user.role) {
     case "CASHIER":
+      return <CashierDashboardContent />;
     case "DISPENSER":
       return <DispenserDashboard />;
     case "PHARMACIST":

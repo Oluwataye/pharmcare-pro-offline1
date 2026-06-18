@@ -11,10 +11,12 @@ import { TransactionsTable } from "./TransactionsTable";
 import { NewSaleForm } from "./NewSaleForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRefundAnalytics } from "@/hooks/sales/useRefundAnalytics";
-import { AlertTriangle, Receipt, RefreshCcw } from "lucide-react";
+import { AlertTriangle, Receipt, RefreshCcw, SendHorizonal } from "lucide-react";
 import { NairaSign } from "../icons/NairaSign";
 import { db } from "@/lib/db-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { DispensaryForm } from "@/features/dispensary/components/DispensaryForm";
 
 interface Transaction {
     id: string;
@@ -40,6 +42,7 @@ export const DispenserDashboardContent = () => {
     const { user } = useAuth();
     const { analytics: refundStats } = useRefundAnalytics();
     const [showNewSaleForm, setShowNewSaleForm] = useState(false);
+    const [showDispensaryForm, setShowDispensaryForm] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
 
     // Real data states
@@ -190,8 +193,16 @@ export const DispenserDashboardContent = () => {
 
     return (
         <div className="space-y-6 animate-fade-in px-2 md:px-0">
-            <div>
+            <div className="flex items-center justify-between">
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">Dispenser Dashboard</h1>
+                <Button
+                    onClick={() => { setShowDispensaryForm(true); setShowNewSaleForm(false); }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    size="sm"
+                >
+                    <SendHorizonal className="mr-2 h-4 w-4" />
+                    Send to Queue
+                </Button>
             </div>
 
             <DispenserHeader
@@ -200,7 +211,16 @@ export const DispenserDashboardContent = () => {
                 handleNewSale={handleNewSale}
             />
 
-            {showNewSaleForm ? (
+            {showDispensaryForm ? (
+                <Card className="border-2 border-blue-200 dark:border-blue-900">
+                    <CardHeader className="p-4 md:p-6">
+                        <CardTitle className="text-xl md:text-2xl text-blue-700 dark:text-blue-400">Prepare Dispensary Ticket</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 md:p-6">
+                        <DispensaryForm onCancel={() => setShowDispensaryForm(false)} />
+                    </CardContent>
+                </Card>
+            ) : showNewSaleForm ? (
                 <Card className="border-2 border-primary/10">
                     <CardHeader className="p-4 md:p-6">
                         <CardTitle className="text-xl md:text-2xl">New Sale</CardTitle>

@@ -293,6 +293,29 @@ async function initDB() {
       `CREATE TABLE IF NOT EXISTS token_blacklist (
         token VARCHAR(500) PRIMARY KEY,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );`,
+
+      `CREATE TABLE IF NOT EXISTS dispensary_queue (
+        id VARCHAR(36) PRIMARY KEY,
+        queue_number VARCHAR(20) NOT NULL UNIQUE,
+        patient_name VARCHAR(255) DEFAULT NULL,
+        dispenser_id VARCHAR(36) NOT NULL,
+        dispenser_name VARCHAR(255) NOT NULL,
+        items JSON NOT NULL,
+        subtotal DECIMAL(15,2) NOT NULL DEFAULT 0,
+        status ENUM('pending','called','processed','cancelled') NOT NULL DEFAULT 'pending',
+        notes TEXT DEFAULT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        processed_at DATETIME DEFAULT NULL,
+        sale_id VARCHAR(36) DEFAULT NULL,
+        cashier_id VARCHAR(36) DEFAULT NULL,
+        cashier_name VARCHAR(255) DEFAULT NULL,
+        FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE SET NULL,
+        INDEX idx_status (status),
+        INDEX idx_queue_number (queue_number),
+        INDEX idx_dispenser_id (dispenser_id),
+        INDEX idx_created_at (created_at)
       );`
     ];
 

@@ -1,6 +1,6 @@
 
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useSales } from "@/hooks/useSales";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,14 +25,27 @@ import { useShift } from "@/hooks/useShift";
 import PaymentModeSelector, { PaymentMode } from "@/components/sales/PaymentModeSelector";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { usePendingQueue } from "@/features/cashier/hooks/usePendingQueue";
 
 const NewSale = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
   const { isOnline } = useOffline();
   const { canCreateWholesale } = usePermissions();
   const { activeShift, isLoading: isLoadingShift } = useShift();
+  const { processQueueEntry } = usePendingQueue();
+
+  // Queue state passed from PendingQueuePanel
+  const queueState = location.state as {
+    fromQueue?: boolean;
+    queueEntryId?: string;
+    queueNumber?: string;
+    patientName?: string;
+    items?: any[];
+  } | null;
+  const preloadedOnce = useRef(false);
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -73,6 +86,28 @@ const NewSale = () => {
     cashierEmail: user ? user.email : undefined,
     cashierId: user ? user.id : undefined
   });
+
+  // Pre-populate form when navigated from dispensary queue
+  useEffect(() => {
+    if (queueState?.fromQueue && !preloadedOnce.current) {
+      preloadedOnce.current = true;
+      if (queueState.patientName) setCustomerName(queueState.patientName);
+      if (queueState.items && queueState.items.length > 0) {
+        queueState.items.forEach(item => {
+          addItem(
+            { id: item.id, name: item.name, sku: item.sku, price: item.price, unit: item.unit },
+            item.quantity,
+            false
+          );
+        });
+      }
+      toast({
+        title: `Queue Ticket ${queueState.queueNumber || ''} Loaded`,
+        description: `${queueState.items?.length || 0} item(s) pre-filled. Review and complete the sale.`,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [payments, setPayments] = useState<PaymentMode[]>([
     { mode: 'cash', amount: calculateTotal() }
@@ -238,6 +273,12 @@ const NewSale = () => {
 
         setLastCompletedSaleId(result.saleId);
         setIsSuccessModalOpen(true);
+
+        // If this sale came from a dispensary queue ticket, mark it processed
+        if (queueState?.fromQueue && queueState.queueEntryId && result.saleId) {
+          const cashierName = user.username || user.name || user.email;
+          await processQueueEntry(queueState.queueEntryId, result.saleId, cashierName);
+        }
       }
       // Note: If save fails, handlePrint already ran, so the user has a receipt.
       // The offline fallback in useSalesCompletion ensures we almost always get a result anyway.

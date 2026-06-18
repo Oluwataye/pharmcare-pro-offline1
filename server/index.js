@@ -107,7 +107,7 @@ const ALLOWED_TABLES = [
     'suppliers', 'purchases', 'purchase_items', 'profiles', 'user_roles',
     'audit_logs', 'system_logs', 'store_settings', 'payment_records', 'stock_movements',
     'system_configs', 'database_backups', 'shifts', 'cash_reconciliations', 'expenses',
-    'print_analytics', 'customers', 'customer_transactions'
+    'print_analytics', 'customers', 'customer_transactions', 'dispensary_queue'
 ];
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -357,6 +357,60 @@ const pool = mysql.createPool({
 
 // Load token blacklist from database
 loadTokenBlacklist();
+
+// Run database schema migrations for new tables
+(async () => {
+    try {
+        const connection = await pool.getConnection();
+        try {
+            await connection.query(`
+                CREATE TABLE IF NOT EXISTS dispensary_queue (
+                  id VARCHAR(36) PRIMARY KEY,
+                  queue_number VARCHAR(20) NOT NULL UNIQUE,
+                  patient_name VARCHAR(255) DEFAULT NULL,
+                  dispenser_id VARCHAR(36) NOT NULL,
+                  dispenser_name VARCHAR(255) NOT NULL,
+                  items JSON NOT NULL,
+                  subtotal DECIMAL(15,2) NOT NULL DEFAULT 0,
+                  status ENUM('pending','called','processed','cancelled') NOT NULL DEFAULT 'pending',
+                  notes TEXT DEFAULT NULL,
+                  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  processed_at DATETIME DEFAULT NULL,
+                  sale_id VARCHAR(36) DEFAULT NULL,
+                  cashier_id VARCHAR(36) DEFAULT NULL,
+                  cashier_name VARCHAR(255) DEFAULT NULL,
+                  FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE SET NULL,
+                  INDEX idx_status (status),
+                  INDEX idx_queue_number (queue_number),
+                  INDEX idx_dispenser_id (dispenser_id),
+                  INDEX idx_created_at (created_at)
+                );
+            `);
+            logToFile(`[DB] Checked/Created dispensary_queue table.`);
+        } finally {
+            connection.release();
+        }
+    } catch (err) {
+        console.error('[DB] Failed to run startup migrations:', err.message);
+        logToFile(`[DB] Failed to run startup migrations: ${err.message}`);
+    }
+})();
+
+// Queue Number Generation Logic (server-side)
+const generateQueueNumber = async (connection) => {
+  const today = new Date();
+  const datePart = today.toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD
+  const prefix = `DQ-${datePart}-`;
+  
+  const [rows] = await connection.execute(
+    `SELECT COUNT(*) as count FROM dispensary_queue WHERE queue_number LIKE ?`,
+    [`${prefix}%`]
+  );
+  
+  const seq = (rows[0].count + 1).toString().padStart(4, '0');
+  return `${prefix}${seq}`;
+};
 
 // Logging new connection establishment
 pool.on('connection', (connection) => {
@@ -1626,6 +1680,159 @@ app.get('/api/expenses', requireAuth, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch expenses' });
     }
+});
+
+// POST /api/dispensary-queue — Dispenser sends items to cashier queue
+app.post('/api/dispensary-queue', requireAuth, requireRole(['DISPENSER', 'PHARMACIST', 'ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const { patient_name, items, subtotal, notes } = req.body;
+    const dispenser_id = req.user.id;
+    const dispenser_name = req.user.name || req.user.email;
+
+    // Validate items
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Items array is required and must not be empty' });
+    }
+
+    const id = generateUUID();
+    const queue_number = await generateQueueNumber(connection);
+
+    await connection.execute(
+      `INSERT INTO dispensary_queue 
+        (id, queue_number, patient_name, dispenser_id, dispenser_name, items, subtotal, notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [id, queue_number, patient_name || null, dispenser_id, dispenser_name, JSON.stringify(items), subtotal || 0, notes || null]
+    );
+
+    await connection.commit();
+
+    // Audit log
+    await logToFile(`[DISPENSARY QUEUE] Created: ${queue_number} by ${dispenser_name} (${dispenser_id}), items: ${items.length}`);
+
+    res.json({ 
+      success: true, 
+      id, 
+      queue_number,
+      message: `Queue ticket ${queue_number} created successfully`
+    });
+  } catch (error) {
+    await connection.rollback();
+    await logToFile(`[DISPENSARY QUEUE] Error creating queue: ${error.message}`);
+    res.status(500).json({ error: 'Failed to create dispensary queue entry', details: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// GET /api/dispensary-queue — Cashier fetches pending items (with optional search)
+app.get('/api/dispensary-queue', requireAuth, async (req, res) => {
+  try {
+    const { status = 'pending', search, limit = 50 } = req.query;
+
+    let query = `
+      SELECT id, queue_number, patient_name, dispenser_name, items, subtotal, status, notes, created_at
+      FROM dispensary_queue
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (status && status !== 'all') {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+
+    if (search) {
+      query += ' AND (patient_name LIKE ? OR queue_number LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT ?';
+    params.push(parseInt(limit));
+
+    const [rows] = await pool.execute(query, params);
+
+    // Parse items JSON safely
+    const parsed = rows.map(row => ({
+      ...row,
+      items: typeof row.items === 'string' ? JSON.parse(row.items) : row.items
+    }));
+
+    res.json({ data: parsed, count: parsed.length });
+  } catch (error) {
+    await logToFile(`[DISPENSARY QUEUE] Error fetching queue: ${error.message}`);
+    res.status(500).json({ error: 'Failed to fetch dispensary queue', details: error.message });
+  }
+});
+
+// PATCH /api/dispensary-queue/:id/process — Mark a queue entry as processed
+app.patch('/api/dispensary-queue/:id/process', requireAuth, requireRole(['CASHIER', 'ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const { id } = req.params;
+    const { sale_id } = req.body;
+    const cashier_id = req.user.id;
+    const cashier_name = req.user.name || req.user.email;
+
+    if (!sale_id) {
+      return res.status(400).json({ error: 'sale_id is required' });
+    }
+
+    const [existing] = await connection.execute(
+      'SELECT id, status FROM dispensary_queue WHERE id = ?',
+      [id]
+    );
+
+    if (!existing.length) {
+      return res.status(404).json({ error: 'Queue entry not found' });
+    }
+
+    if (existing[0].status === 'processed') {
+      return res.status(409).json({ error: 'Queue entry already processed' });
+    }
+
+    await connection.execute(
+      `UPDATE dispensary_queue 
+       SET status = 'processed', sale_id = ?, cashier_id = ?, cashier_name = ?, processed_at = NOW()
+       WHERE id = ?`,
+      [sale_id, cashier_id, cashier_name, id]
+    );
+
+    await connection.commit();
+    await logToFile(`[DISPENSARY QUEUE] Processed: ${id} → sale ${sale_id} by ${cashier_name}`);
+
+    res.json({ success: true, message: 'Queue entry marked as processed' });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: 'Failed to update queue entry', details: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// PATCH /api/dispensary-queue/:id/cancel — Cancel a pending queue entry
+app.patch('/api/dispensary-queue/:id/cancel', requireAuth, requireRole(['DISPENSER', 'ADMIN', 'SUPER_ADMIN']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [result] = await pool.execute(
+      `UPDATE dispensary_queue SET status = 'cancelled', updated_at = NOW() 
+       WHERE id = ? AND status = 'pending'`,
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Queue entry not found or already processed' });
+    }
+
+    res.json({ success: true, message: 'Queue entry cancelled' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to cancel queue entry', details: error.message });
+  }
 });
 
 app.post('/api/:table', requireAuth, async (req, res) => {
